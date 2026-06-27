@@ -15,5 +15,6 @@ public interface IFamilyOsDbContext
     DbSet<Warranty> Warranties { get; }
     DbSet<MedicalRecord> MedicalRecords { get; }
     DbSet<FinancialRecord> FinancialRecords { get; }
+    DbSet<AiProcessingJob> AiProcessingJobs { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

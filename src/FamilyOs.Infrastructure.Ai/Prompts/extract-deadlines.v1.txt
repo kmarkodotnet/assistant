@@ -1,0 +1,8 @@
+Kerd le az osszes jovo hataridejet a dokumentumbol. Mai datum: {{today}}.
+Csak a mai datumnal kesobb esedekeses határidőket add meg.
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"deadlines": [{"title": "...", "dueDate": "YYYY-MM-DD", "description": "..."}]}

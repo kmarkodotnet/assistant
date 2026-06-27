@@ -1,0 +1,7 @@
+Kerd le a penzugyi informaciokat az alabbi dokumentumbol.
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"amount": 0.0, "currency": "HUF", "recordDate": "YYYY-MM-DD|null", "isPaid": false, "recurrencePeriod": "None|Monthly|Quarterly|Yearly|null", "notes": "..."}

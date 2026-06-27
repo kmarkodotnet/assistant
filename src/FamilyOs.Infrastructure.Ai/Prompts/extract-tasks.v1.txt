@@ -1,0 +1,8 @@
+Azonositsd az osszes teendot es cselekvesi elemet a dokumentumban. Csaladtagok: {{familyMembers}}.
+Ha egy teendo hozzarendelheto valamelyik csaladtaghoz, jelold az assignedToHint mezoben.
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"tasks": [{"title": "...", "assignedToHint": "...", "dueDate": "YYYY-MM-DD|null", "description": "..."}]}

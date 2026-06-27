@@ -1,0 +1,7 @@
+Foglald ossze az alabbi dokumentumot 3-5 magyar mondatban. Csak a legfontosabb informaciokat emeld ki.
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"summary": "..."}

@@ -82,6 +82,12 @@ public sealed class Document
         UpdatedUtc = DateTime.UtcNow;
     }
 
+    public void SetLanguage(string? language)
+    {
+        Language = language;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
     public void SoftDelete()
     {
         DeletedUtc = DateTime.UtcNow;

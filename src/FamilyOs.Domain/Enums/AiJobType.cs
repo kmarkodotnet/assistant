@@ -5,9 +5,10 @@ public enum AiJobType
     ExtractText,
     DetectLanguage,
     Summarize,
-    ExtractEntities,
+    Classify,
     ExtractDeadlines,
     ExtractTasks,
-    Classify,
+    ExtractFacet,
+    ExtractEntities,
     Embed,
 }

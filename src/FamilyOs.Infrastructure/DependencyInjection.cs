@@ -3,6 +3,7 @@ using FamilyOs.Application.Abstractions.Common;
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Abstractions.Storage;
 using FamilyOs.Application.Common.Abstractions;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Documents.Common;
 using FamilyOs.Infrastructure.Audit;
@@ -11,6 +12,7 @@ using FamilyOs.Infrastructure.Authorization;
 using FamilyOs.Infrastructure.Common;
 using FamilyOs.Infrastructure.Documents;
 using FamilyOs.Infrastructure.Persistence;
+using FamilyOs.Infrastructure.Persistence.Repositories;
 using FamilyOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -78,6 +80,9 @@ public static class DependencyInjection
 
         // Document helpers
         services.AddScoped<IDuplicateDocumentChecker, DuplicateDocumentChecker>();
+
+        // AI job repository
+        services.AddScoped<IAiProcessingJobRepository, AiProcessingJobRepository>();
 
         return services;
     }

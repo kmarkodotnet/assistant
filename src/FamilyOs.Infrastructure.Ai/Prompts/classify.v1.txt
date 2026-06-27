@@ -1,0 +1,7 @@
+Kategorizald az alabbi dokumentumot. Azonositsd a fo temakat, cimkeket, es ha lehetseges, a facet tipust (Warranty, Medical, Financial, vagy null).
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"topics": ["..."], "tags": ["..."], "facetType": "Warranty|Medical|Financial|null"}

@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/FamilyOs.Infrastructure/FamilyOs.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/FamilyOs.Infrastructure.Ai/FamilyOs.Infrastructure.Ai.csproj" />
     <ProjectReference Include="../../src/FamilyOs.Application/FamilyOs.Application.csproj" />
   </ItemGroup>
 

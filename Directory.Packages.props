@@ -34,6 +34,17 @@
     <!-- Infrastructure.Ai -->
     <PackageVersion Include="Pgvector" Version="0.3.2" />
     <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    <PackageVersion Include="Polly" Version="8.4.1" />
+    <PackageVersion Include="Polly.Extensions.Http" Version="3.0.0" />
+    <PackageVersion Include="PdfPig" Version="0.1.9" />
+    <PackageVersion Include="Tesseract" Version="5.2.0" />
+    <PackageVersion Include="NTextCat" Version="0.3.65" />
+
+    <!-- Hangfire -->
+    <PackageVersion Include="Hangfire.Core" Version="1.8.14" />
+    <PackageVersion Include="Hangfire.PostgreSql" Version="1.20.10" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.14" />
 
     <!-- Workers -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.0" />

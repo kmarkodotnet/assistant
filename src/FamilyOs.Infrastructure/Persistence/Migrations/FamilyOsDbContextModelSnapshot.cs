@@ -26,6 +26,69 @@ partial class FamilyOsDbContextModelSnapshot : ModelSnapshot
         modelBuilder.HasPostgresEnum("app", "user_role", new[] { "Admin", "Adult", "Child" });
         modelBuilder.HasPostgresEnum("app", "relation", new[] { "Self", "Spouse", "Child", "Parent", "Other" });
 
+        modelBuilder.Entity("FamilyOs.Domain.Entities.AiProcessingJob", b =>
+        {
+            b.Property<Guid>("Id")
+                .HasColumnType("uuid")
+                .HasColumnName("id");
+
+            b.Property<string>("JobType")
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnType("text")
+                .HasColumnName("job_type");
+
+            b.Property<string>("TargetType")
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnType("text")
+                .HasColumnName("target_type");
+
+            b.Property<Guid>("TargetId")
+                .HasColumnType("uuid")
+                .HasColumnName("target_id");
+
+            b.Property<string>("Status")
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasColumnType("text")
+                .HasColumnName("status");
+
+            b.Property<int>("Attempt")
+                .HasColumnType("integer")
+                .HasColumnName("attempt");
+
+            b.Property<int>("MaxAttempts")
+                .HasColumnType("integer")
+                .HasColumnName("max_attempts");
+
+            b.Property<string>("ErrorMessage")
+                .HasMaxLength(2000)
+                .HasColumnType("text")
+                .HasColumnName("error_message");
+
+            b.Property<DateTime>("NextAttemptUtc")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("next_attempt_utc");
+
+            b.Property<DateTime>("CreatedUtc")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("created_utc");
+
+            b.Property<DateTime>("UpdatedUtc")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_utc");
+
+            b.HasKey("Id")
+                .HasName("pk_ai_processing_job");
+
+            b.HasIndex("NextAttemptUtc", "CreatedUtc")
+                .HasDatabaseName("ix_ai_processing_job_pending")
+                .HasFilter("status IN ('Queued', 'Failed')");
+
+            b.ToTable("ai_processing_job", "app");
+        });
+
         modelBuilder.Entity("FamilyOs.Domain.Entities.FamilyMember", b =>
         {
             b.Property<Guid>("Id")

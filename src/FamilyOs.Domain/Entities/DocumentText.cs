@@ -47,4 +47,19 @@ public sealed class DocumentText
         IsManuallyEdited = true;
         UpdatedUtc = DateTime.UtcNow;
     }
+
+    public void UpdateContent(string content, ExtractionMethod method, string? language)
+    {
+        Content = content;
+        ExtractionMethod = method;
+        CharCount = content.Length;
+        LanguageDetected = language;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void SetLanguageDetected(string? language)
+    {
+        LanguageDetected = language;
+        UpdatedUtc = DateTime.UtcNow;
+    }
 }

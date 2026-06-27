@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="../FamilyOs.Application/FamilyOs.Application.csproj" />
@@ -6,8 +6,24 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Polly" />
+    <PackageReference Include="Polly.Extensions.Http" />
     <PackageReference Include="Pgvector" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" />
+    <PackageReference Include="PdfPig" />
+    <PackageReference Include="Tesseract" />
+    <PackageReference Include="NTextCat" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Prompts\*.txt" />
+    <!-- NTextCat language profile — copied to output so NTextCatLanguageDetector can load it -->
+    <None Include="$(NuGetPackageFolders)ntextcat\0.3.65\content\Core14.profile.xml"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="Core14.profile.xml"
+          Condition="Exists('$(NuGetPackageFolders)ntextcat\0.3.65\content\Core14.profile.xml')" />
   </ItemGroup>
 
 </Project>

@@ -19,6 +19,7 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<Warranty> Warranties => Set<Warranty>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<FinancialRecord> FinancialRecords => Set<FinancialRecord>();
+    public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

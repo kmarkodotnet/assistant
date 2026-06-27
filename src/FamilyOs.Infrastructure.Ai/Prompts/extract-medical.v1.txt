@@ -1,0 +1,7 @@
+Kerd le az orvosi informaciokat az alabbi dokumentumbol.
+
+Dokumentum:
+{{document}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"recordType": "...", "doctorName": "...", "recordDate": "YYYY-MM-DD|null", "diagnosis": "...", "notes": "..."}
