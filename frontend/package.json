@@ -1,0 +1,51 @@
+{
+  "name": "family-os-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "ng serve --port 4200",
+    "build": "ng build",
+    "build:prod": "ng build --configuration production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts,.html",
+    "gen:api": "openapi-generator-cli generate -i http://localhost:5000/openapi/v1.json -g typescript-angular -o src/app/api-client --skip-validate-spec"
+  },
+  "dependencies": {
+    "@angular/animations": "^20.0.0",
+    "@angular/common": "^20.0.0",
+    "@angular/compiler": "^20.0.0",
+    "@angular/core": "^20.0.0",
+    "@angular/forms": "^20.0.0",
+    "@angular/platform-browser": "^20.0.0",
+    "@angular/platform-browser-dynamic": "^20.0.0",
+    "@angular/router": "^20.0.0",
+    "@ngx-translate/core": "^16.0.0",
+    "@ngx-translate/http-loader": "^16.0.0",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.7.0",
+    "zone.js": "^0.15.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^20.0.0",
+    "@angular/cli": "^20.0.0",
+    "@angular/compiler-cli": "^20.0.0",
+    "@angular-eslint/eslint-plugin": "^18.0.0",
+    "@angular-eslint/eslint-plugin-template": "^18.0.0",
+    "@angular-eslint/template-parser": "^18.0.0",
+    "@openapitools/openapi-generator-cli": "^2.13.0",
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "jsdom": "^25.0.0",
+    "postcss": "^8.4.47",
+    "prettier": "^3.3.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "~5.5.0",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
+  }
+}

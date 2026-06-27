@@ -23,3 +23,15 @@ lint:
 
 migrate-up:
 	dotnet ef database update --project src/FamilyOs.Infrastructure --startup-project src/FamilyOs.Api
+
+fe-install:
+	cd frontend && pnpm install
+
+fe-build:
+	cd frontend && pnpm build:prod
+
+fe-test:
+	cd frontend && pnpm test
+
+fe-lint:
+	cd frontend && pnpm lint

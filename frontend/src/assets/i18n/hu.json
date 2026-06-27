@@ -1,0 +1,48 @@
+{
+  "nav": {
+    "dashboard": "Irányítópult",
+    "documents": "Dokumentumok",
+    "notes": "Jegyzetek",
+    "search": "Keresés",
+    "tasks": "Feladatok",
+    "deadlines": "Határidők",
+    "reminders": "Emlékeztetők",
+    "topics": "Témák",
+    "family": "Família",
+    "suggestions": "Javaslatok",
+    "settings": "Beállítások",
+    "admin": "Admin",
+    "logout": "Kijelentkezés"
+  },
+  "login": {
+    "subtitle": "Bejelentkezés a Family OS-be",
+    "privacy": "Az adataid kizárólag a saját otthoni szerveredre kerülnek. Semmi sem kerül külső felhőbe."
+  },
+  "dashboard": {
+    "title": "Irányítópult"
+  },
+  "common": {
+    "comingSoon": "Hamarosan elérhető",
+    "loading": "Betöltés...",
+    "error": "Hiba történt",
+    "retry": "Újra",
+    "save": "Mentés",
+    "cancel": "Mégse",
+    "delete": "Törlés",
+    "edit": "Szerkesztés",
+    "add": "Hozzáadás",
+    "search": "Keresés",
+    "noResults": "Nincs találat",
+    "confirm": "Megerősítés"
+  },
+  "offline": {
+    "title": "Nincs kapcsolat az otthoni szerverrel",
+    "message": "A Family OS csak az otthoni hálózaton érhető el. Csatlakozz a háztartási Wi-Fi-re, és próbáld újra.",
+    "retry": "Újrapróbálás",
+    "logout": "Kijelentkezés"
+  },
+  "toast": {
+    "successDefault": "Sikeres művelet",
+    "errorDefault": "Hiba történt"
+  }
+}
