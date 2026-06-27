@@ -44,5 +44,19 @@
   "toast": {
     "successDefault": "Sikeres művelet",
     "errorDefault": "Hiba történt"
+  },
+  "family": {
+    "title": "Família kezelése",
+    "add": "Új családtag",
+    "edit": "Szerkesztés",
+    "displayName": "Megjelenített név",
+    "fullName": "Teljes név",
+    "relation": "Kapcsolat",
+    "birthDate": "Születési dátum"
+  },
+  "documents": {
+    "title": "Dokumentumok",
+    "upload": "Új feltöltés",
+    "noDocuments": "Nincsenek dokumentumok"
   }
 }
