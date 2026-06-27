@@ -1,0 +1,11 @@
+Válaszolj a következő kérdésre kizárólag az alábbi dokumentumrészletek alapján.
+Ha a válasz nem szerepel a forrásokban, írd: "Nincs erre vonatkozó adat a rendelkezésre álló dokumentumokban."
+Ne találj ki adatokat. Hivatkozz a forrás ID-jára.
+
+Kérdés: {{question}}
+
+Forrásrészletek:
+{{sources}}
+
+Válasz JSON formátumban:
+{"answer": "...", "citedSourceIds": ["chunk-id-1", ...], "confidence": 0.0-1.0}

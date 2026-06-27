@@ -28,6 +28,10 @@ internal sealed class FamilyTaskConfiguration : IEntityTypeConfiguration<FamilyT
         builder.Property(x => x.Origin)
             .HasColumnType("app.origin");
 
+        builder.Property(x => x.ApprovedByUserAccountId).HasColumnName("approved_by_user_account_id");
+        builder.Property(x => x.ApprovedUtc).HasColumnName("approved_utc");
+        builder.Property(x => x.CompletedUtc).HasColumnName("completed_utc");
+
         builder.HasOne(t => t.SourceDocument)
             .WithMany()
             .HasForeignKey(t => t.SourceDocumentId)

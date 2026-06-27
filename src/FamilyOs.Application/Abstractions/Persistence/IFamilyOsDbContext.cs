@@ -1,10 +1,12 @@
 using FamilyOs.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace FamilyOs.Application.Abstractions.Persistence;
 
 public interface IFamilyOsDbContext
 {
+    DatabaseFacade Database { get; }
     DbSet<FamilyMember> FamilyMembers { get; }
     DbSet<UserAccount> UserAccounts { get; }
     DbSet<RevokedSession> RevokedSessions { get; }
@@ -24,5 +26,6 @@ public interface IFamilyOsDbContext
     DbSet<Deadline> Deadlines { get; }
     DbSet<FamilyTask> Tasks { get; }
     DbSet<AiProcessingJob> AiProcessingJobs { get; }
+    DbSet<SavedSearch> SavedSearches { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

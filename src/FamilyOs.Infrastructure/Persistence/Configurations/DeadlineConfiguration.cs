@@ -28,6 +28,9 @@ internal sealed class DeadlineConfiguration : IEntityTypeConfiguration<Deadline>
         builder.Property(x => x.Origin)
             .HasColumnType("app.origin");
 
+        builder.Property(x => x.ApprovedByUserAccountId).HasColumnName("approved_by_user_account_id");
+        builder.Property(x => x.ApprovedUtc).HasColumnName("approved_utc");
+
         builder.HasOne(d => d.SourceDocument)
             .WithMany()
             .HasForeignKey(d => d.SourceDocumentId)

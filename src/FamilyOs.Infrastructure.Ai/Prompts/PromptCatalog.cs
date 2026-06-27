@@ -10,6 +10,7 @@ public static class PromptCatalog
     public const string ExtractWarranty = "extract-warranty.v1.txt";
     public const string ExtractMedical = "extract-medical.v1.txt";
     public const string ExtractFinancial = "extract-financial.v1.txt";
+    public const string QaMagyar = "qa-magyar.v1.txt";
 
     public static string GetVersion(string resourceName)
     {

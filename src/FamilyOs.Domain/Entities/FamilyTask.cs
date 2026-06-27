@@ -21,6 +21,9 @@ public sealed class FamilyTask
     public DateTime CreatedUtc { get; private set; }
     public DateTime UpdatedUtc { get; private set; }
     public DateTime? DeletedUtc { get; private set; }
+    public Guid? ApprovedByUserAccountId { get; private set; }
+    public DateTime? ApprovedUtc { get; private set; }
+    public DateTime? CompletedUtc { get; private set; }
     public Document? SourceDocument { get; private set; }
 
     public static FamilyTask CreateSuggestion(
@@ -46,4 +49,77 @@ public sealed class FamilyTask
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow,
         };
+
+    public static FamilyTask Create(
+        string title,
+        Guid createdByUserAccountId,
+        string? description = null,
+        DateTime? dueDateUtc = null,
+        Priority priority = Priority.Normal,
+        Guid? assignedToFamilyMemberId = null,
+        bool isPrivate = false)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            Title = title,
+            Description = description,
+            DueDateUtc = dueDateUtc,
+            Status = Enums.TaskStatus.Open,
+            Priority = priority,
+            Origin = Origin.Manual,
+            AssignedToFamilyMemberId = assignedToFamilyMemberId,
+            CreatedByUserAccountId = createdByUserAccountId,
+            IsPrivate = isPrivate,
+            CreatedUtc = DateTime.UtcNow,
+            UpdatedUtc = DateTime.UtcNow,
+        };
+
+    public void SetStatus(Enums.TaskStatus status)
+    {
+        Status = status;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void Approve(Guid approvedByUserId)
+    {
+        ApprovedByUserAccountId = approvedByUserId;
+        ApprovedUtc = DateTime.UtcNow;
+        Origin = Origin.AiApproved;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void Reject()
+    {
+        DeletedUtc = DateTime.UtcNow;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void SetCompletedUtc()
+    {
+        CompletedUtc = DateTime.UtcNow;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void UpdateDetails(
+        string? title,
+        string? description,
+        DateTime? dueDateUtc,
+        Priority? priority,
+        Guid? assignedToFamilyMemberId,
+        bool? isPrivate)
+    {
+        if (title is not null) Title = title;
+        if (description is not null) Description = description;
+        if (dueDateUtc.HasValue) DueDateUtc = dueDateUtc;
+        if (priority.HasValue) Priority = priority.Value;
+        if (assignedToFamilyMemberId.HasValue) AssignedToFamilyMemberId = assignedToFamilyMemberId;
+        if (isPrivate.HasValue) IsPrivate = isPrivate.Value;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void SoftDelete()
+    {
+        DeletedUtc = DateTime.UtcNow;
+        UpdatedUtc = DateTime.UtcNow;
+    }
 }

@@ -1,5 +1,6 @@
 using FamilyOs.Application.Auth.Options;
 using FamilyOs.Application.Common.Behaviors;
+using FamilyOs.Application.Search.Handlers;
 using FluentValidation;
 using Mapster;
 using MapsterMapper;
@@ -31,6 +32,13 @@ public static class DependencyInjection
         config.Scan(assembly);
         services.AddSingleton(config);
         services.AddScoped<IMapper, ServiceMapper>();
+
+        // Search sub-handlers (not MediatR, registered as scoped services)
+        services.AddScoped<FilterSearchHandler>();
+        services.AddScoped<FtsSearchHandler>();
+        services.AddScoped<SemanticSearchHandler>();
+        services.AddScoped<HybridSearchHandler>();
+        services.AddScoped<QaHandler>();
 
         return services;
     }

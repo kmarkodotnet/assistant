@@ -28,6 +28,7 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<Deadline> Deadlines => Set<Deadline>();
     public DbSet<FamilyTask> Tasks => Set<FamilyTask>();
     public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
+    public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

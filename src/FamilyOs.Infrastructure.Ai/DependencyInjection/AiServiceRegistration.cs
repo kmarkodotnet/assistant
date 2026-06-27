@@ -1,8 +1,10 @@
 using FamilyOs.Application.Abstractions.Ai;
+using FamilyOs.Infrastructure.Ai.Caching;
 using FamilyOs.Infrastructure.Ai.Extraction;
 using FamilyOs.Infrastructure.Ai.Lang;
 using FamilyOs.Infrastructure.Ai.Options;
 using FamilyOs.Infrastructure.Ai.Providers;
+using FamilyOs.Infrastructure.Ai.Search;
 using FamilyOs.Infrastructure.Ai.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +49,12 @@ public static class AiServiceRegistration
 
         // Progress notifier — no-op for workers (cross-process SignalR is post-MVP)
         services.AddSingleton<IProcessingProgressNotifier, NoOpProgressNotifier>();
+
+        // Search services (Epic E)
+        services.AddMemoryCache();
+        services.AddSingleton<IQueryEmbeddingCache, QueryEmbeddingCache>();
+        services.AddScoped<ISemanticSearchService, SemanticSearchService>();
+        services.AddScoped<IQuestionAnswerService, OllamaQuestionAnswerer>();
 
         return services;
     }

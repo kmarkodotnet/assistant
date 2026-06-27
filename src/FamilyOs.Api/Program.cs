@@ -5,6 +5,7 @@ using FamilyOs.Api.Realtime;
 using FamilyOs.Application;
 using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Infrastructure;
+using FamilyOs.Infrastructure.Ai.DependencyInjection;
 using FamilyOs.Infrastructure.Health;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -22,6 +23,7 @@ builder.Host.UseSerilog((ctx, cfg) => cfg.ReadFrom.Configuration(ctx.Configurati
 // Services
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddFamilyOsAiServices(builder.Configuration);
 builder.Services.AddAuthorization(opts => opts.AddFamilyOsPolicies());
 
 // HttpClient for OllamaHealthCheck
@@ -80,6 +82,10 @@ app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
 app.MapUsersEndpoints();
 app.MapDocumentEndpoints();
+app.MapSearchEndpoints();
+app.MapTasksEndpoints();
+app.MapDeadlinesEndpoints();
+app.MapSuggestionsEndpoints();
 
 // SignalR hub
 app.MapHub<DocumentsHub>("/hubs/documents");
