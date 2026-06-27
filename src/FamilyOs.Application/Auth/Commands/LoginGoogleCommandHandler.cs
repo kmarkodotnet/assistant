@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Auth;
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Auth.Dtos;
 using FamilyOs.Application.Auth.Options;
+using FamilyOs.Application.Common.Abstractions;
 using FamilyOs.Application.Common.Errors;
 using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
@@ -15,7 +16,8 @@ public sealed class LoginGoogleCommandHandler(
     IGoogleTokenValidator tokenValidator,
     IAllowlistService allowlistService,
     IFamilyOsDbContext db,
-    IOptions<AuthOptions> authOptions)
+    IOptions<AuthOptions> authOptions,
+    IAuditLogger auditLogger)
     : IRequestHandler<LoginGoogleCommand, CurrentUserDto>
 {
     public async Task<CurrentUserDto> Handle(
@@ -25,7 +27,10 @@ public sealed class LoginGoogleCommandHandler(
         var claims = await tokenValidator.ValidateAsync(request.IdToken);
 
         if (!allowlistService.IsEmailAllowed(claims.Email))
+        {
+            await auditLogger.LogAsync(AuditAction.LoginFailed, null, detailsJson: $"{{\"email\":\"{claims.Email}\"}}", ct: cancellationToken);
             throw new ForbiddenException("A megadott e-mail cím nincs az engedélyezési listán.");
+        }
 
         var existing = await db.UserAccounts
             .Include(u => u.FamilyMember)
@@ -35,6 +40,7 @@ public sealed class LoginGoogleCommandHandler(
         {
             existing.RecordLogin();
             await db.SaveChangesAsync(cancellationToken);
+            await auditLogger.LogAsync(AuditAction.Login, existing.Id, entityType: "UserAccount", entityId: existing.Id, ct: cancellationToken);
             return MapToDto(existing);
         }
 
@@ -80,6 +86,7 @@ public sealed class LoginGoogleCommandHandler(
         db.UserAccounts.Add(account);
 
         await db.SaveChangesAsync(cancellationToken);
+        await auditLogger.LogAsync(AuditAction.Login, account.Id, entityType: "UserAccount", entityId: account.Id, ct: cancellationToken);
 
         return MapToDto(account);
     }

@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Auth;
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Auth.Commands;
 using FamilyOs.Application.Auth.Options;
+using FamilyOs.Application.Common.Abstractions;
 using FamilyOs.Application.Common.Errors;
 using FamilyOs.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public sealed class LoginGoogleCommandHandlerTests
 {
     private readonly IGoogleTokenValidator _tokenValidator = Substitute.For<IGoogleTokenValidator>();
     private readonly IAllowlistService _allowlistService = Substitute.For<IAllowlistService>();
+    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IOptions<AuthOptions> _options = Options.Create(new AuthOptions
     {
         BootstrapAdmin = "admin@test.com",
@@ -31,7 +33,7 @@ public sealed class LoginGoogleCommandHandlerTests
 
         var db = Substitute.For<IFamilyOsDbContext>();
         var handler = new LoginGoogleCommandHandler(
-            _tokenValidator, _allowlistService, db, _options);
+            _tokenValidator, _allowlistService, db, _options, _auditLogger);
 
         // Act
         var act = async () => await handler.Handle(new LoginGoogleCommand("token"), default);
@@ -49,7 +51,7 @@ public sealed class LoginGoogleCommandHandlerTests
 
         var db = Substitute.For<IFamilyOsDbContext>();
         var handler = new LoginGoogleCommandHandler(
-            _tokenValidator, _allowlistService, db, _options);
+            _tokenValidator, _allowlistService, db, _options, _auditLogger);
 
         // Act
         var act = async () => await handler.Handle(new LoginGoogleCommand("bad-token"), default);

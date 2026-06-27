@@ -9,5 +9,11 @@ public interface IFamilyOsDbContext
     DbSet<UserAccount> UserAccounts { get; }
     DbSet<RevokedSession> RevokedSessions { get; }
     DbSet<PendingInvite> PendingInvites { get; }
+    DbSet<AuditLog> AuditLogs { get; }
+    DbSet<Document> Documents { get; }
+    DbSet<DocumentText> DocumentTexts { get; }
+    DbSet<Warranty> Warranties { get; }
+    DbSet<MedicalRecord> MedicalRecords { get; }
+    DbSet<FinancialRecord> FinancialRecords { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

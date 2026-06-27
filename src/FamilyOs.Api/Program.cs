@@ -51,6 +51,7 @@ var app = builder.Build();
 // Middleware pipeline (order critical)
 app.UseMiddleware<ExceptionToProblemDetailsMiddleware>();
 app.UseMiddleware<TraceIdEnrichmentMiddleware>();
+app.UseMiddleware<IdempotencyMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -73,6 +74,7 @@ app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
 app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
 app.MapUsersEndpoints();
+app.MapDocumentEndpoints();
 
 // System endpoints
 app.MapGet("/api/v1/system/heartbeat",

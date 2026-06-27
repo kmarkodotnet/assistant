@@ -1,9 +1,17 @@
 using FamilyOs.Application.Abstractions.Auth;
 using FamilyOs.Application.Abstractions.Common;
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Abstractions.Storage;
+using FamilyOs.Application.Common.Abstractions;
+using FamilyOs.Application.Common.Authorization;
+using FamilyOs.Application.Documents.Common;
+using FamilyOs.Infrastructure.Audit;
 using FamilyOs.Infrastructure.Auth;
+using FamilyOs.Infrastructure.Authorization;
 using FamilyOs.Infrastructure.Common;
+using FamilyOs.Infrastructure.Documents;
 using FamilyOs.Infrastructure.Persistence;
+using FamilyOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -55,6 +63,21 @@ public static class DependencyInjection
 
         services.AddSingleton<IAllowlistService, AllowlistService>();
         services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
+
+        // Authorization
+        services.AddScoped<IFamilyOsAuthorizationService, FamilyOsAuthorizationService>();
+
+        // Audit
+        services.AddScoped<IAuditLogger, DbAuditLogger>();
+
+        // Storage
+        services.AddScoped<IDocumentStorage, LocalFilesystemDocumentStorage>();
+
+        // MIME detection
+        services.AddSingleton<IMimeDetector, MimeDetector>();
+
+        // Document helpers
+        services.AddScoped<IDuplicateDocumentChecker, DuplicateDocumentChecker>();
 
         return services;
     }
