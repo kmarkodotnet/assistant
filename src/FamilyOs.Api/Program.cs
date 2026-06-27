@@ -4,6 +4,7 @@ using FamilyOs.Api.Middleware;
 using FamilyOs.Api.Realtime;
 using FamilyOs.Application;
 using FamilyOs.Application.Abstractions.Ai;
+using FamilyOs.Application.Abstractions.Notifications;
 using FamilyOs.Infrastructure;
 using FamilyOs.Infrastructure.Ai.DependencyInjection;
 using FamilyOs.Infrastructure.Health;
@@ -50,6 +51,9 @@ if (!string.IsNullOrWhiteSpace(connStr))
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IProcessingProgressNotifier, SignalRProgressNotifier>();
 
+// Override NullNotificationPusher with real SignalR implementation
+builder.Services.AddScoped<IInAppNotificationPusher, SignalRNotificationPusher>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -86,9 +90,13 @@ app.MapSearchEndpoints();
 app.MapTasksEndpoints();
 app.MapDeadlinesEndpoints();
 app.MapSuggestionsEndpoints();
+app.MapRemindersEndpoints();
+app.MapNotificationsEndpoints();
+app.MapNotesEndpoints();
 
-// SignalR hub
+// SignalR hubs
 app.MapHub<DocumentsHub>("/hubs/documents");
+app.MapHub<NotificationsHub>("/hubs/notifications");
 
 // System endpoints
 app.MapGet("/api/v1/system/heartbeat",

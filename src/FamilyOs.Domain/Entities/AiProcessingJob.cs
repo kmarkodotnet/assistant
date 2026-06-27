@@ -32,6 +32,20 @@ public sealed class AiProcessingJob
         UpdatedUtc = DateTime.UtcNow,
     };
 
+    public static AiProcessingJob CreateForNote(AiJobType jobType, Guid noteId) => new()
+    {
+        Id = Guid.NewGuid(),
+        JobType = jobType,
+        TargetType = JobTargetType.Note,
+        TargetId = noteId,
+        Status = JobStatus.Queued,
+        Attempt = 0,
+        MaxAttempts = 5,
+        NextAttemptUtc = DateTime.UtcNow,
+        CreatedUtc = DateTime.UtcNow,
+        UpdatedUtc = DateTime.UtcNow,
+    };
+
     public void MarkRunning()
     {
         Status = JobStatus.Running;

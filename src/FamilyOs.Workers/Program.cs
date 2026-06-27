@@ -39,6 +39,11 @@ var builder = Host.CreateDefaultBuilder(args)
 
         // Scheduler background service
         services.AddHostedService<AiJobScheduler>();
+
+        // Reminder engine background services
+        services.AddHostedService<DueReminderDispatcher>();
+        services.AddHostedService<EscalationScheduler>();
+        services.AddHostedService<NotificationFeedRetentionJob>();
     });
 
 var host = builder.Build();

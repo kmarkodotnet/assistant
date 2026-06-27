@@ -1,16 +1,20 @@
 using FamilyOs.Application.Abstractions.Auth;
 using FamilyOs.Application.Abstractions.Common;
+using FamilyOs.Application.Abstractions.Notifications;
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Abstractions.Storage;
 using FamilyOs.Application.Common.Abstractions;
 using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Documents.Common;
+using FamilyOs.Application.Notes.Common;
 using FamilyOs.Infrastructure.Audit;
 using FamilyOs.Infrastructure.Auth;
 using FamilyOs.Infrastructure.Authorization;
 using FamilyOs.Infrastructure.Common;
 using FamilyOs.Infrastructure.Documents;
+using FamilyOs.Infrastructure.Markdown;
+using FamilyOs.Infrastructure.Notifications;
 using FamilyOs.Infrastructure.Persistence;
 using FamilyOs.Infrastructure.Persistence.Repositories;
 using FamilyOs.Infrastructure.Storage;
@@ -83,6 +87,18 @@ public static class DependencyInjection
 
         // AI job repository
         services.AddScoped<IAiProcessingJobRepository, AiProcessingJobRepository>();
+
+        // Notifications
+        services.Configure<SmtpOptions>(configuration.GetSection("Notifications:Smtp"));
+        services.AddScoped<InAppNotificationService>();
+        services.AddScoped<SmtpNotificationService>();
+        services.AddScoped<INotificationService, CompositeNotificationService>();
+
+        // Null pusher by default (overridden in API project with SignalR implementation)
+        services.AddScoped<IInAppNotificationPusher, NullNotificationPusher>();
+
+        // Markdown
+        services.AddScoped<IMarkdownSanitizer, MarkdownSanitizer>();
 
         return services;
     }

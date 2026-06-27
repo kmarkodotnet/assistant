@@ -27,5 +27,11 @@ public interface IFamilyOsDbContext
     DbSet<FamilyTask> Tasks { get; }
     DbSet<AiProcessingJob> AiProcessingJobs { get; }
     DbSet<SavedSearch> SavedSearches { get; }
+    DbSet<Reminder> Reminders { get; }
+    DbSet<NotificationFeed> NotificationFeed { get; }
+    DbSet<Note> Notes { get; }
+    DbSet<NoteChunk> NoteChunks { get; }
+    DbSet<NoteTag> NoteTags { get; }
+    DbSet<NoteTopic> NoteTopics { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

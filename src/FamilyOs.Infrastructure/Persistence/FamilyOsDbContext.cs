@@ -29,6 +29,12 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<FamilyTask> Tasks => Set<FamilyTask>();
     public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
+    public DbSet<NotificationFeed> NotificationFeed => Set<NotificationFeed>();
+    public DbSet<Note> Notes => Set<Note>();
+    public DbSet<NoteChunk> NoteChunks => Set<NoteChunk>();
+    public DbSet<NoteTag> NoteTags => Set<NoteTag>();
+    public DbSet<NoteTopic> NoteTopics => Set<NoteTopic>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

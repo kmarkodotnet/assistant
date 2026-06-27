@@ -23,7 +23,7 @@ public sealed class FtsSearchHandler
 
         var q = req.Query;
 
-        var results = await _db.DocumentTexts
+        var docResults = await _db.DocumentTexts
             .AsNoTracking()
             .Where(dt =>
                 dt.Content.Contains(q) ||
@@ -41,14 +41,37 @@ public sealed class FtsSearchHandler
             })
             .ToListAsync(ct);
 
-        var hits = results.Select(r => new SearchHit
+        var noteResults = await _db.Notes
+            .AsNoTracking()
+            .Where(n => n.Title.Contains(q) || n.Body.Contains(q))
+            .Where(n => !n.IsPrivate || n.CreatedByUserAccountId == userId)
+            .OrderByDescending(n => n.UpdatedUtc)
+            .Take(req.PageSize)
+            .Select(n => new
+            {
+                n.Id,
+                n.Title,
+                Snippet = n.Body.Length > 200 ? n.Body.Substring(0, 200) : n.Body,
+            })
+            .ToListAsync(ct);
+
+        var hits = docResults.Select(r => new SearchHit
         {
             EntityType = "document",
             EntityId = r.DocumentId,
             Title = r.Title,
             Snippet = r.Content.Length > 200 ? r.Content[..200] + "…" : r.Content,
             Score = 0.7,
-        }).ToList();
+        })
+        .Concat(noteResults.Select(n => new SearchHit
+        {
+            EntityType = "note",
+            EntityId = n.Id,
+            Title = n.Title,
+            Snippet = n.Snippet,
+            Score = 0.65,
+        }))
+        .ToList();
 
         return new SearchResponse
         {

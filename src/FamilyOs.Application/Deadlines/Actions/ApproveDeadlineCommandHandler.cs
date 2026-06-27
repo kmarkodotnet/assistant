@@ -1,5 +1,8 @@
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Common.Errors;
+using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
+using FamilyOs.Domain.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,7 +28,23 @@ public sealed class ApproveDeadlineCommandHandler : IRequestHandler<ApproveDeadl
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        // TODO (Epic G): Create Reminder entities based on DefaultReminderPolicy
-        // The Reminder entity doesn't exist yet; skip reminder creation for now.
+        // Epic G: Create Reminder entities based on DefaultReminderPolicy
+        var offsets = DefaultReminderPolicy.GetOffsets(deadline.Category);
+        foreach (var (offsetDays, _) in offsets)
+        {
+            var triggerUtc = ReminderTriggerCalculator.CalculateFromOffsetDays(deadline.DueDateUtc, offsetDays);
+            if (triggerUtc > DateTime.UtcNow)
+            {
+                var reminder = Reminder.ForDeadline(
+                    deadline.Id,
+                    request.ApprovedByUserId,
+                    triggerUtc,
+                    NotificationChannel.InApp,
+                    request.ApprovedByUserId);
+                _db.Reminders.Add(reminder);
+            }
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 }

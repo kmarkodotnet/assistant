@@ -60,6 +60,12 @@
     <!-- HealthChecks -->
     <PackageVersion Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
 
+    <!-- Markdown -->
+    <PackageVersion Include="Markdig" Version="0.38.0" />
+
+    <!-- Recurrence / iCal -->
+    <PackageVersion Include="Ical.Net" Version="4.2.0" />
+
     <!-- Testing -->
     <PackageVersion Include="Respawn" Version="6.2.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
