@@ -12,7 +12,7 @@ var builder = Host.CreateDefaultBuilder(args)
         // Core infrastructure (DB, auth, storage, audit, etc.)
         services.AddInfrastructure(ctx.Configuration);
 
-        // AI services (Ollama, Tesseract, extractors, language detector)
+        // AI services (Ollama, Tesseract, extractors, language detector, content analyzers)
         services.AddFamilyOsAiServices(ctx.Configuration);
 
         // Hangfire with PostgreSQL storage
@@ -26,6 +26,13 @@ var builder = Host.CreateDefaultBuilder(args)
         // AI job runners (scoped — one per job execution)
         services.AddScoped<ExtractTextJobRunner>();
         services.AddScoped<DetectLanguageJobRunner>();
+        services.AddScoped<SummarizeJobRunner>();
+        services.AddScoped<ClassifyJobRunner>();
+        services.AddScoped<ExtractDeadlinesJobRunner>();
+        services.AddScoped<ExtractTasksJobRunner>();
+        services.AddScoped<ExtractFacetJobRunner>();
+        services.AddScoped<EmbedJobRunner>();
+        services.AddScoped<PipelineOrchestrator>();
 
         // AiJobExecutor is transient — Hangfire resolves it per invocation
         services.AddTransient<AiJobExecutor>();

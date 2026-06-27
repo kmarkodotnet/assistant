@@ -16,14 +16,25 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentText> DocumentTexts => Set<DocumentText>();
+    public DbSet<DocumentSummary> DocumentSummaries => Set<DocumentSummary>();
+    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<Topic> Topics => Set<Topic>();
+    public DbSet<DocumentTag> DocumentTags => Set<DocumentTag>();
+    public DbSet<DocumentTopic> DocumentTopics => Set<DocumentTopic>();
     public DbSet<Warranty> Warranties => Set<Warranty>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<FinancialRecord> FinancialRecords => Set<FinancialRecord>();
+    public DbSet<Deadline> Deadlines => Set<Deadline>();
+    public DbSet<FamilyTask> Tasks => Set<FamilyTask>();
     public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("app");
+
+        // pgvector extension
+        modelBuilder.HasPostgresExtension("vector");
 
         // Register PostgreSQL enums
         modelBuilder.HasPostgresEnum<UserRole>("app", "user_role");

@@ -1,7 +1,9 @@
 using FamilyOs.Api.Auth;
 using FamilyOs.Api.Endpoints;
 using FamilyOs.Api.Middleware;
+using FamilyOs.Api.Realtime;
 using FamilyOs.Application;
+using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Infrastructure;
 using FamilyOs.Infrastructure.Health;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -43,6 +45,9 @@ if (!string.IsNullOrWhiteSpace(connStr))
         failureStatus: HealthStatus.Unhealthy, tags: ["ready"]);
 }
 
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IProcessingProgressNotifier, SignalRProgressNotifier>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -75,6 +80,9 @@ app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
 app.MapUsersEndpoints();
 app.MapDocumentEndpoints();
+
+// SignalR hub
+app.MapHub<DocumentsHub>("/hubs/documents");
 
 // System endpoints
 app.MapGet("/api/v1/system/heartbeat",

@@ -24,9 +24,6 @@ public sealed class AiJobExecutor
     private static readonly Action<ILogger, Guid, AiJobType, int, Exception?> LogJobFailed =
         LoggerMessage.Define<Guid, AiJobType, int>(LogLevel.Error, new EventId(3, nameof(LogJobFailed)), "AiJobExecutor: job {Id} ({Type}) failed on attempt {Attempt}.");
 
-    private static readonly Action<ILogger, AiJobType, Exception?> LogJobTypeNotImplemented =
-        LoggerMessage.Define<AiJobType>(LogLevel.Information, new EventId(4, nameof(LogJobTypeNotImplemented)), "AiJobExecutor: job type {Type} is not yet implemented — marking done.");
-
     public AiJobExecutor(
         IAiProcessingJobRepository jobRepository,
         IServiceProvider serviceProvider,
@@ -67,6 +64,20 @@ public sealed class AiJobExecutor
         }
 
         await _jobRepository.SaveChangesAsync(ct);
+
+        // After each job completes (done or failed), check if all parallel jobs are done
+        var parallelTypes = new[]
+        {
+            AiJobType.Summarize, AiJobType.Classify, AiJobType.ExtractDeadlines,
+            AiJobType.ExtractTasks, AiJobType.Embed,
+        };
+
+        if (parallelTypes.Contains(job.JobType))
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var orchestrator = scope.ServiceProvider.GetRequiredService<PipelineOrchestrator>();
+            await orchestrator.CheckAndFinalizeAsync(job.TargetId, ct);
+        }
     }
 
     private async Task DispatchAsync(Domain.Entities.AiProcessingJob job, CancellationToken ct)
@@ -84,14 +95,37 @@ public sealed class AiJobExecutor
                 break;
 
             case AiJobType.Summarize:
+                var summarizeRunner = _serviceProvider.GetRequiredService<SummarizeJobRunner>();
+                await summarizeRunner.RunAsync(job, ct);
+                break;
+
             case AiJobType.Classify:
+                var classifyRunner = _serviceProvider.GetRequiredService<ClassifyJobRunner>();
+                await classifyRunner.RunAsync(job, ct);
+                break;
+
             case AiJobType.ExtractDeadlines:
+                var deadlinesRunner = _serviceProvider.GetRequiredService<ExtractDeadlinesJobRunner>();
+                await deadlinesRunner.RunAsync(job, ct);
+                break;
+
             case AiJobType.ExtractTasks:
+                var tasksRunner = _serviceProvider.GetRequiredService<ExtractTasksJobRunner>();
+                await tasksRunner.RunAsync(job, ct);
+                break;
+
             case AiJobType.ExtractFacet:
-            case AiJobType.ExtractEntities:
+                var facetRunner = _serviceProvider.GetRequiredService<ExtractFacetJobRunner>();
+                await facetRunner.RunAsync(job, ct);
+                break;
+
             case AiJobType.Embed:
-                // Post-MVP: these runners will be added in subsequent phases
-                LogJobTypeNotImplemented(_logger, job.JobType, null);
+                var embedRunner = _serviceProvider.GetRequiredService<EmbedJobRunner>();
+                await embedRunner.RunAsync(job, ct);
+                break;
+
+            case AiJobType.ExtractEntities:
+                // Post-MVP: entity extraction not yet implemented
                 break;
 
             default:

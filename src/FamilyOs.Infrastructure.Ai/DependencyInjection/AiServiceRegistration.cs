@@ -3,6 +3,7 @@ using FamilyOs.Infrastructure.Ai.Extraction;
 using FamilyOs.Infrastructure.Ai.Lang;
 using FamilyOs.Infrastructure.Ai.Options;
 using FamilyOs.Infrastructure.Ai.Providers;
+using FamilyOs.Infrastructure.Ai.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +35,18 @@ public static class AiServiceRegistration
         services.AddScoped<PdfTextLayerExtractor>();
         services.AddScoped<TesseractOcrExtractor>();
         services.AddScoped<IDocumentTextExtractor, CompositeDocumentTextExtractor>();
+
+        // AI content analysis services (scoped)
+        services.AddScoped<IDocumentSummarizer, OllamaDocumentSummarizer>();
+        services.AddScoped<IDocumentClassifier, OllamaDocumentClassifier>();
+        services.AddScoped<IDeadlineExtractor, OllamaDeadlineExtractor>();
+        services.AddScoped<ITaskExtractor, OllamaTaskExtractor>();
+        services.AddScoped<IWarrantyExtractor, OllamaWarrantyExtractor>();
+        services.AddScoped<IMedicalRecordExtractor, OllamaMedicalRecordExtractor>();
+        services.AddScoped<IFinancialRecordExtractor, OllamaFinancialRecordExtractor>();
+
+        // Progress notifier — no-op for workers (cross-process SignalR is post-MVP)
+        services.AddSingleton<IProcessingProgressNotifier, NoOpProgressNotifier>();
 
         return services;
     }
