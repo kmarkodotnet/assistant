@@ -19,6 +19,10 @@ internal sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAc
         builder.Property(x => x.Email).IsRequired();
         builder.Property(x => x.DisplayName).IsRequired().HasMaxLength(200);
 
+        builder.Property(x => x.EmailEnabled).HasDefaultValue(true);
+        builder.Property(x => x.QuietHoursStart).HasMaxLength(5);
+        builder.Property(x => x.QuietHoursEnd).HasMaxLength(5);
+
         builder.HasIndex(x => x.GoogleSubject)
             .IsUnique()
             .HasFilter("deleted_utc IS NULL")

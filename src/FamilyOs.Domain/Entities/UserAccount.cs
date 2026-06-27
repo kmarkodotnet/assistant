@@ -18,6 +18,11 @@ public sealed class UserAccount
     public DateTime UpdatedUtc { get; private set; }
     public DateTime? DeletedUtc { get; private set; }
 
+    // User preferences
+    public bool EmailEnabled { get; private set; } = true;
+    public string? QuietHoursStart { get; private set; }
+    public string? QuietHoursEnd { get; private set; }
+
     // Navigation
     public FamilyMember FamilyMember { get; private set; } = null!;
 
@@ -42,6 +47,7 @@ public sealed class UserAccount
             DisplayName = displayName.Trim(),
             Role = role,
             IsActive = true,
+            EmailEnabled = true,
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow,
         };
@@ -54,4 +60,11 @@ public sealed class UserAccount
     public void SetActive(bool active) => IsActive = active;
 
     public void SoftDelete() => DeletedUtc = DateTime.UtcNow;
+
+    public void UpdatePreferences(bool emailEnabled, string? quietHoursStart, string? quietHoursEnd)
+    {
+        EmailEnabled = emailEnabled;
+        QuietHoursStart = quietHoursStart;
+        QuietHoursEnd = quietHoursEnd;
+    }
 }

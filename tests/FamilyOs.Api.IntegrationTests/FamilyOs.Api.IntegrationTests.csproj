@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Respawn" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 

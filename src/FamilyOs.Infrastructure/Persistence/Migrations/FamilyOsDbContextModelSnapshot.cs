@@ -97,6 +97,68 @@ partial class FamilyOsDbContextModelSnapshot : ModelSnapshot
             });
         });
 
+        modelBuilder.Entity("FamilyOs.Domain.Entities.PendingInvite", b =>
+        {
+            b.Property<Guid>("Id")
+                .HasColumnType("uuid")
+                .HasColumnName("id");
+
+            b.Property<DateTime>("CreatedUtc")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("created_utc");
+
+            b.Property<string>("Email")
+                .IsRequired()
+                .HasMaxLength(320)
+                .HasColumnType("character varying(320)")
+                .HasColumnName("email");
+
+            b.Property<Guid>("FamilyMemberId")
+                .HasColumnType("uuid")
+                .HasColumnName("family_member_id");
+
+            b.Property<string>("Role")
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnType("character varying(50)")
+                .HasColumnName("role");
+
+            b.HasKey("Id")
+                .HasName("pk_pending_invite");
+
+            b.HasIndex("Email")
+                .IsUnique()
+                .HasDatabaseName("ux_pending_invite_email");
+
+            b.ToTable("pending_invite", "app");
+        });
+
+        modelBuilder.Entity("FamilyOs.Domain.Entities.RevokedSession", b =>
+        {
+            b.Property<Guid>("Id")
+                .HasColumnType("uuid")
+                .HasColumnName("id");
+
+            b.Property<DateTime>("RevokedUtc")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("revoked_utc");
+
+            b.Property<string>("SessionId")
+                .IsRequired()
+                .HasMaxLength(256)
+                .HasColumnType("character varying(256)")
+                .HasColumnName("session_id");
+
+            b.HasKey("Id")
+                .HasName("pk_revoked_session");
+
+            b.HasIndex("SessionId")
+                .IsUnique()
+                .HasDatabaseName("ix_revoked_session_session_id");
+
+            b.ToTable("revoked_session", "app");
+        });
+
         modelBuilder.Entity("FamilyOs.Domain.Entities.UserAccount", b =>
         {
             b.Property<Guid>("Id")
@@ -116,6 +178,12 @@ partial class FamilyOsDbContextModelSnapshot : ModelSnapshot
                 .HasMaxLength(200)
                 .HasColumnType("text")
                 .HasColumnName("display_name");
+
+            b.Property<bool>("EmailEnabled")
+                .ValueGeneratedOnAdd()
+                .HasColumnType("boolean")
+                .HasDefaultValue(true)
+                .HasColumnName("email_enabled");
 
             b.Property<string>("Email")
                 .IsRequired()
@@ -138,6 +206,16 @@ partial class FamilyOsDbContextModelSnapshot : ModelSnapshot
             b.Property<DateTime?>("LastLoginUtc")
                 .HasColumnType("timestamp with time zone")
                 .HasColumnName("last_login_utc");
+
+            b.Property<string>("QuietHoursEnd")
+                .HasMaxLength(5)
+                .HasColumnType("character varying(5)")
+                .HasColumnName("quiet_hours_end");
+
+            b.Property<string>("QuietHoursStart")
+                .HasMaxLength(5)
+                .HasColumnType("character varying(5)")
+                .HasColumnName("quiet_hours_start");
 
             b.Property<int>("Role")
                 .HasColumnType("integer")

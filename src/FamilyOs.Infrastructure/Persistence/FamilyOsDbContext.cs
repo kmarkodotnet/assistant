@@ -1,15 +1,18 @@
+using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyOs.Infrastructure.Persistence;
 
-public sealed class FamilyOsDbContext : DbContext
+public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
 {
     public FamilyOsDbContext(DbContextOptions<FamilyOsDbContext> options) : base(options) { }
 
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<RevokedSession> RevokedSessions => Set<RevokedSession>();
+    public DbSet<PendingInvite> PendingInvites => Set<PendingInvite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
