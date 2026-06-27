@@ -1,0 +1,10 @@
+<Project>
+  <!-- Import root Directory.Build.props to inherit global settings -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Test projects suppress CA1707 (underscore in method names) because
+       coding-standards.md mandates Method_State_ExpectedBehavior naming. -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+</Project>
