@@ -21,7 +21,7 @@ internal sealed class NoteTagConfiguration : IEntityTypeConfiguration<NoteTag>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(nt => nt.Tag)
-            .WithMany()
+            .WithMany(t => t.NoteTags)
             .HasForeignKey(nt => nt.TagId)
             .OnDelete(DeleteBehavior.Cascade);
     }

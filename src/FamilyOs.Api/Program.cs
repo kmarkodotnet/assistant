@@ -93,6 +93,9 @@ app.MapSuggestionsEndpoints();
 app.MapRemindersEndpoints();
 app.MapNotificationsEndpoints();
 app.MapNotesEndpoints();
+app.MapTagsEndpoints();
+app.MapTopicsEndpoints();
+app.MapDashboardEndpoints();
 
 // SignalR hubs
 app.MapHub<DocumentsHub>("/hubs/documents");

@@ -14,6 +14,8 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Slug).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Icon).HasMaxLength(100);
+        builder.Property(x => x.SortOrder).HasDefaultValue(0);
 
         builder.HasIndex(x => x.Slug)
             .IsUnique()

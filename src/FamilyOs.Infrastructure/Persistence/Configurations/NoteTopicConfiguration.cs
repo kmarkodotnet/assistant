@@ -18,7 +18,7 @@ internal sealed class NoteTopicConfiguration : IEntityTypeConfiguration<NoteTopi
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(nt => nt.Topic)
-            .WithMany()
+            .WithMany(t => t.NoteTopics)
             .HasForeignKey(nt => nt.TopicId)
             .OnDelete(DeleteBehavior.Cascade);
     }

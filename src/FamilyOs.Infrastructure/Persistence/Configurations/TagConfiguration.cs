@@ -13,6 +13,7 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Color).HasMaxLength(7);
 
         builder.HasIndex(x => x.Name)
             .IsUnique()
