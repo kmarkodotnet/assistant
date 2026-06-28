@@ -5,7 +5,7 @@ RUN npm install -g pnpm && pnpm install --frozen-lockfile
 COPY frontend/ .
 RUN pnpm build --configuration production
 
-FROM nginx:alpine AS runtime
+FROM nginx:1.25-alpine AS runtime
 COPY --from=build /app/dist/family-os/browser /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+COPY docker/nginx/family-os.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80 443

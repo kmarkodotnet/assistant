@@ -18,3 +18,16 @@ export const roleGuard: CanActivateFn = (route) => {
   notify.error('Nincs jogosultságod ehhez az oldalhoz.');
   return router.createUrlTree(['/']);
 };
+
+export const adminGuard: CanActivateFn = (_route, _state) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  const notify = inject(NotificationService);
+
+  if (auth.currentUser()?.role === 'Admin') {
+    return true;
+  }
+
+  notify.error('Nincs jogosultságod ehhez az oldalhoz.');
+  return router.createUrlTree(['/']);
+};

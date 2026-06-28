@@ -33,5 +33,7 @@ public interface IFamilyOsDbContext
     DbSet<NoteChunk> NoteChunks { get; }
     DbSet<NoteTag> NoteTags { get; }
     DbSet<NoteTopic> NoteTopics { get; }
+    DbSet<Source> Sources { get; }
+    DbSet<EmailMessage> EmailMessages { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -35,6 +35,8 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<NoteChunk> NoteChunks => Set<NoteChunk>();
     public DbSet<NoteTag> NoteTags => Set<NoteTag>();
     public DbSet<NoteTopic> NoteTopics => Set<NoteTopic>();
+    public DbSet<Source> Sources => Set<Source>();
+    public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

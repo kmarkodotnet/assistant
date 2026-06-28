@@ -2,7 +2,7 @@
   "nav": {
     "dashboard": "Irányítópult",
     "documents": "Dokumentumok",
-    "notes": "Jegyzetek",
+    "notes": "Feljegyzések",
     "search": "Keresés",
     "tasks": "Feladatok",
     "deadlines": "Határidők",
@@ -58,5 +58,41 @@
     "title": "Dokumentumok",
     "upload": "Új feltöltés",
     "noDocuments": "Nincsenek dokumentumok"
+  },
+  "admin": {
+    "audit": {
+      "title": "Audit napló",
+      "export": "Exportálás",
+      "filter": "Szűrés",
+      "noResults": "Nincs találat"
+    },
+    "security": {
+      "title": "Biztonsági események"
+    },
+    "aiJobs": {
+      "title": "AI feladatok",
+      "retry": "Újrapróbálás",
+      "cancel": "Mégse"
+    },
+    "aiProviders": {
+      "title": "AI providerek",
+      "privacyLocked": "Adatvédelmi mód: LocalOnly (kódba égetett)"
+    }
+  },
+  "settings": {
+    "integrations": {
+      "title": "Integrációk",
+      "gmail": {
+        "connect": "Gmail csatlakoztatása",
+        "disconnect": "Lecsatlakozás",
+        "sync": "Szinkronizálás most",
+        "connected": "Csatlakozva",
+        "notConnected": "Nincs csatlakoztatva"
+      }
+    },
+    "backup": {
+      "title": "Biztonsági mentések",
+      "info": "Napi automatikus mentés aktív"
+    }
   }
 }

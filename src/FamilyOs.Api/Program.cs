@@ -96,6 +96,11 @@ app.MapNotesEndpoints();
 app.MapTagsEndpoints();
 app.MapTopicsEndpoints();
 app.MapDashboardEndpoints();
+app.MapAuditEndpoints();
+app.MapAiJobsAdminEndpoints();
+app.MapAiProvidersAdminEndpoints();
+app.MapSourcesEndpoints();
+app.MapSettingsEndpoints();
 
 // SignalR hubs
 app.MapHub<DocumentsHub>("/hubs/documents");

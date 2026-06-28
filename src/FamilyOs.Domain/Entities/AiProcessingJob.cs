@@ -67,4 +67,32 @@ public sealed class AiProcessingJob
         NextAttemptUtc = DateTime.UtcNow.AddSeconds(delaySeconds);
         UpdatedUtc = DateTime.UtcNow;
     }
+
+    public void ResetForRetry()
+    {
+        Status = JobStatus.Queued;
+        NextAttemptUtc = DateTime.UtcNow;
+        ErrorMessage = null;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void Cancel()
+    {
+        Status = JobStatus.Cancelled;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public static AiProcessingJob CreateForEmailMessage(AiJobType jobType, Guid emailMessageId) => new()
+    {
+        Id = Guid.NewGuid(),
+        JobType = jobType,
+        TargetType = JobTargetType.EmailMessage,
+        TargetId = emailMessageId,
+        Status = JobStatus.Queued,
+        Attempt = 0,
+        MaxAttempts = 5,
+        NextAttemptUtc = DateTime.UtcNow,
+        CreatedUtc = DateTime.UtcNow,
+        UpdatedUtc = DateTime.UtcNow,
+    };
 }

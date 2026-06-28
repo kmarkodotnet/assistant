@@ -9,12 +9,27 @@ export default [
       {
         path: 'preferences',
         loadComponent: () => import('./pages/preferences.page').then(m => m.PreferencesPage),
-        title: 'Beállítások — Family OS',
+        title: 'Személyes beállítások — Family OS',
       },
       {
         path: 'system',
         loadComponent: () => import('./pages/settings-system.page').then(m => m.SettingsSystemPage),
         title: 'Rendszer — Family OS',
+      },
+      {
+        path: 'integrations',
+        loadComponent: () => import('./pages/integrations.page').then(m => m.IntegrationsPage),
+        title: 'Integrációk — Family OS',
+      },
+      {
+        path: 'ai-providers',
+        loadComponent: () => import('./pages/ai-providers-settings.page').then(m => m.AiProvidersSettingsPage),
+        title: 'AI providerek — Family OS',
+      },
+      {
+        path: 'backup',
+        loadComponent: () => import('./pages/backup.page').then(m => m.BackupPage),
+        title: 'Biztonsági mentések — Family OS',
       },
     ],
   },

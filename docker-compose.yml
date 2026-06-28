@@ -6,39 +6,73 @@ services:
     environment:
       POSTGRES_DB: family_os
       POSTGRES_USER: family_migrator
-      POSTGRES_PASSWORD: changeme
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U family_migrator -d family_os"]
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
 
   api:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    ports:
-      - "8080:8080"
     environment:
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_app;Password=changeme"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_app;Password=${APP_DB_PASSWORD:-changeme}"
       ASPNETCORE_ENVIRONMENT: Production
+      FAMILYOS_DATA_DIR: /data
+      Auth__BootstrapAdmin: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      Auth__AllowedEmails: ${ALLOWED_EMAILS:-}
+      Ai__PrivacyMode: "LocalOnly"
+      Ollama__BaseUrl: "http://ollama:11434"
+    volumes:
+      - documents:/data/documents
+      - logs:/var/log/family-os
+      - dp_keys:/var/lib/family-os/dp-keys
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    restart: unless-stopped
 
   workers:
     build:
       context: .
       dockerfile: docker/workers.Dockerfile
     environment:
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_app;Password=changeme"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_app;Password=${APP_DB_PASSWORD:-changeme}"
+      FAMILYOS_DATA_DIR: /data
+      Ai__PrivacyMode: "LocalOnly"
+      Ollama__BaseUrl: "http://ollama:11434"
+    volumes:
+      - documents:/data/documents
+      - logs:/var/log/family-os
     depends_on:
       postgres:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
 
   web:
     build:
@@ -46,16 +80,62 @@ services:
       dockerfile: docker/web.Dockerfile
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./docker/nginx/family-os.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  backup:
+    image: alpine:3.19
+    entrypoint: ["/bin/sh", "-c", "crond -f -d 8"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: family_os
+      POSTGRES_USER: family_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      BACKUP_AGE_PUBKEY: ${BACKUP_AGE_PUBKEY:-}
+    volumes:
+      - pgdata:/var/lib/postgresql/data:ro
+      - documents:/data/documents:ro
+      - backups:/data/backups
+      - ./scripts/backup.sh:/etc/periodic/daily/backup:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - backup
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
+  pgdata:
   ollama_models:
+  documents:
+  logs:
+  dp_keys:
+  backups:

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: family_os_test
+          POSTGRES_USER: family_test
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FamilyOs.sln
+
+      - name: Build
+        run: dotnet build FamilyOs.sln --no-restore --configuration Release
+
+      - name: Test (unit)
+        run: dotnet test FamilyOs.sln --no-build --configuration Release --filter "Category!=Integration&Category!=E2E"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=family_os_test;Username=family_test;Password=test_password"
+
+      - name: Check vulnerable packages
+        run: dotnet list package --vulnerable --include-transitive 2>&1 | grep -E "^(Project|   > )" || true
+
+  frontend:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test -- --watch=false --browsers=ChromeHeadless
+
+      - name: Build
+        run: pnpm build --configuration production
+
+      - name: Audit
+        run: pnpm audit --audit-level=high || true

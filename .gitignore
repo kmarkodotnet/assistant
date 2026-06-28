@@ -161,7 +161,9 @@ secrets.json
 
 # Docker environment (tartalmaz jelszavakat!)
 .env
-.env.example
+
+# TLS tanúsítványok és privát kulcsok (soha ne kerüljenek repóba!)
+docker/nginx/certs/
 
 ===========================================
 

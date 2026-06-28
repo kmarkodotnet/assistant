@@ -1,5 +1,7 @@
 using FamilyOs.Application.Abstractions.Ai;
+using FamilyOs.Application.Abstractions.Email;
 using FamilyOs.Infrastructure.Ai.Caching;
+using FamilyOs.Infrastructure.Ai.Email;
 using FamilyOs.Infrastructure.Ai.Extraction;
 using FamilyOs.Infrastructure.Ai.Lang;
 using FamilyOs.Infrastructure.Ai.Options;
@@ -55,6 +57,9 @@ public static class AiServiceRegistration
         services.AddSingleton<IQueryEmbeddingCache, QueryEmbeddingCache>();
         services.AddScoped<ISemanticSearchService, SemanticSearchService>();
         services.AddScoped<IQuestionAnswerService, OllamaQuestionAnswerer>();
+
+        // Email ingestion
+        services.AddScoped<IEmailIngestionService, GmailIngestionService>();
 
         return services;
     }
