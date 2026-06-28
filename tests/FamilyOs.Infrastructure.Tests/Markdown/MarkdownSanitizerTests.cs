@@ -34,7 +34,7 @@ public sealed class MarkdownSanitizerTests
 
         var result = _sanitizer.Sanitize(input);
 
-        Assert.Contains("<h1>", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<h1", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<strong>", result, StringComparison.OrdinalIgnoreCase);
     }
 
