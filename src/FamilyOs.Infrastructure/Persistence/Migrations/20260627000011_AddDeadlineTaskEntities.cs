@@ -1,8 +1,12 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+using FamilyOs.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace FamilyOs.Infrastructure.Persistence.Migrations;
 
 /// <inheritdoc />
+[DbContext(typeof(FamilyOsDbContext))]
+[Migration("20260627000011_AddDeadlineTaskEntities")]
 public partial class AddDeadlineTaskEntities : Migration
 {
     /// <inheritdoc />

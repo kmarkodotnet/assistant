@@ -8,6 +8,7 @@ using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Documents.Common;
 using FamilyOs.Application.Notes.Common;
+using FamilyOs.Domain.Enums;
 using FamilyOs.Infrastructure.Audit;
 using FamilyOs.Infrastructure.Auth;
 using FamilyOs.Infrastructure.Authorization;
@@ -23,6 +24,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
+using Npgsql.NameTranslation;
 
 namespace FamilyOs.Infrastructure;
 
@@ -36,11 +39,36 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserAccessor, CurrentUserService>();
 
+        var connectionString = configuration.GetConnectionString("Default")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? string.Empty;
+
+        // DB enums are stored as PascalCase (e.g. 'Self', 'Admin'). The default Npgsql
+        // translator would send snake_case ('self', 'admin'), causing 22P02 errors.
+        var pgNameTranslator = new NpgsqlNullNameTranslator();
+
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.MapEnum<UserRole>("app.user_role", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<Relation>("app.relation", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<AuditAction>("app.audit_action", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<ProcessingStatus>("app.processing_status", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<SourceType>("app.source_type", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<Origin>("app.origin", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<ExtractionMethod>("app.extraction_method", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<MedicalRecordType>("app.medical_record_type", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<FinancialRecordType>("app.financial_record_type", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.MapEnum<RecurrencePeriod>("app.recurrence_period", nameTranslator: pgNameTranslator);
+        dataSourceBuilder.UseVector();
+        var dataSource = dataSourceBuilder.Build();
+
+        services.AddSingleton(dataSource);
+
         services.AddDbContext<FamilyOsDbContext>(opts =>
-            opts.UseNpgsql(
-                    configuration.GetConnectionString("Default")
-                    ?? configuration.GetConnectionString("DefaultConnection"),
-                    npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "app"))
+            opts.UseNpgsql(dataSource, npgsql =>
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history", "app");
+                    npgsql.UseVector();
+                })
                 .UseSnakeCaseNamingConvention());
 
         services.AddScoped<IFamilyOsDbContext>(sp => sp.GetRequiredService<FamilyOsDbContext>());

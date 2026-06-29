@@ -35,7 +35,16 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
         using var ms = new MemoryStream();
         context.Response.Body = ms;
 
-        await next(context);
+        try
+        {
+            await next(context);
+        }
+        catch
+        {
+            // Restore the original body so outer middleware (e.g. error handlers) can write to it.
+            context.Response.Body = originalBody;
+            throw;
+        }
 
         ms.Position = 0;
         var body = ms.ToArray();

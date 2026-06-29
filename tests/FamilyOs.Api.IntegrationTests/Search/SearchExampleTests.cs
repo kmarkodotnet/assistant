@@ -5,7 +5,8 @@ using FluentAssertions;
 namespace FamilyOs.Api.IntegrationTests.Search;
 
 [Trait("Category", "Integration")]
-public sealed class SearchExampleTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class SearchExampleTests(FamilyOsTestFixture fixture)
 {
     private async Task LoginAsync()
     {

@@ -8,12 +8,22 @@ using Microsoft.Extensions.Logging;
 
 namespace FamilyOs.Infrastructure.Ai.Email;
 
-public sealed class GmailIngestionService(
+public sealed partial class GmailIngestionService(
     IFamilyOsDbContext db,
     IAuditLogger auditLogger,
     ILogger<GmailIngestionService> logger)
     : IEmailIngestionService
 {
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Source {SourceId} not found for Gmail sync.")]
+    private static partial void LogSourceNotFound(ILogger logger, Guid sourceId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting Gmail sync for source {SourceId} ({Name}).")]
+    private static partial void LogGmailSyncStarted(ILogger logger, Guid sourceId, string name);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Gmail sync completed for source {SourceId}: fetched={Fetched}, inserted={Inserted}, skipped={Skipped}.")]
+    private static partial void LogGmailSyncCompleted(ILogger logger, Guid sourceId, int fetched, int inserted, int skipped);
+
     public async Task<EmailIngestionReport> SyncAsync(Guid sourceId, CancellationToken ct)
     {
         var source = await db.Sources
@@ -21,7 +31,7 @@ public sealed class GmailIngestionService(
 
         if (source is null)
         {
-            logger.LogWarning("Source {SourceId} not found for Gmail sync.", sourceId);
+            LogSourceNotFound(logger, sourceId);
             return new EmailIngestionReport(0, 0, 0, $"Source {sourceId} not found.");
         }
 
@@ -30,7 +40,7 @@ public sealed class GmailIngestionService(
             return new EmailIngestionReport(0, 0, 0, $"Source {sourceId} is not a Gmail account (Kind={source.Kind}).");
         }
 
-        logger.LogInformation("Starting Gmail sync for source {SourceId} ({Name}).", sourceId, source.Name);
+        LogGmailSyncStarted(logger, sourceId, source.Name);
 
         // Gmail API is not yet configured — return a placeholder report.
         // Full implementation: parse ConfigJson for refresh token, call Gmail API with
@@ -48,9 +58,7 @@ public sealed class GmailIngestionService(
         source.UpdateLastSync();
         await db.SaveChangesAsync(ct);
 
-        logger.LogInformation(
-            "Gmail sync completed for source {SourceId}: fetched={Fetched}, inserted={Inserted}, skipped={Skipped}.",
-            sourceId, report.Fetched, report.Inserted, report.Skipped);
+        LogGmailSyncCompleted(logger, sourceId, report.Fetched, report.Inserted, report.Skipped);
 
         return report;
     }

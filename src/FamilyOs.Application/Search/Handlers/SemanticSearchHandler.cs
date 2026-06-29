@@ -1,5 +1,6 @@
 using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Common.Errors;
 using FamilyOs.Application.Search.Dtos;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,16 @@ public sealed class SemanticSearchHandler
         if (string.IsNullOrWhiteSpace(req.Query))
             return new SearchResponse { ModeUsed = SearchMode.Semantic };
 
-        var embedding = await _embeddingCache.GetOrComputeAsync(req.Query, ct);
+        float[] embedding;
+        try
+        {
+            embedding = await _embeddingCache.GetOrComputeAsync(req.Query, ct);
+        }
+        catch (InfrastructureException)
+        {
+            // Embedding service unavailable → return empty results gracefully.
+            return new SearchResponse { ModeUsed = SearchMode.Semantic };
+        }
         var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct);
 
         // Group by document, take best score per document

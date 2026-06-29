@@ -5,7 +5,8 @@ using FluentAssertions;
 namespace FamilyOs.Api.IntegrationTests.Tasks;
 
 [Trait("Category", "Integration")]
-public sealed class TaskLifecycleTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class TaskLifecycleTests(FamilyOsTestFixture fixture)
 {
     private async Task LoginAsync()
     {

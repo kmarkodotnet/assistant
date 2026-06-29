@@ -5,7 +5,8 @@ using FluentAssertions;
 namespace FamilyOs.Api.IntegrationTests.Documents;
 
 [Trait("Category", "Integration")]
-public sealed class UploadDocumentTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class UploadDocumentTests(FamilyOsTestFixture fixture)
 {
     [Fact]
     public async Task Upload_ValidPdf_Returns201()

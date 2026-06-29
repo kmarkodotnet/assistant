@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Npgsql.NameTranslation;
 
 namespace FamilyOs.Infrastructure.Persistence;
 
@@ -45,17 +46,19 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
         // pgvector extension
         modelBuilder.HasPostgresExtension("vector");
 
-        // Register PostgreSQL enums
-        modelBuilder.HasPostgresEnum<UserRole>("app", "user_role");
-        modelBuilder.HasPostgresEnum<Relation>("app", "relation");
-        modelBuilder.HasPostgresEnum<AuditAction>("app", "audit_action");
-        modelBuilder.HasPostgresEnum<ProcessingStatus>("app", "processing_status");
-        modelBuilder.HasPostgresEnum<SourceType>("app", "source_type");
-        modelBuilder.HasPostgresEnum<Origin>("app", "origin");
-        modelBuilder.HasPostgresEnum<ExtractionMethod>("app", "extraction_method");
-        modelBuilder.HasPostgresEnum<MedicalRecordType>("app", "medical_record_type");
-        modelBuilder.HasPostgresEnum<FinancialRecordType>("app", "financial_record_type");
-        modelBuilder.HasPostgresEnum<RecurrencePeriod>("app", "recurrence_period");
+        // DB enum labels are PascalCase; NpgsqlNullNameTranslator preserves C# member names as-is.
+        var pgNameTranslator = new NpgsqlNullNameTranslator();
+
+        modelBuilder.HasPostgresEnum<UserRole>("app", "user_role", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<Relation>("app", "relation", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<AuditAction>("app", "audit_action", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<ProcessingStatus>("app", "processing_status", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<SourceType>("app", "source_type", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<Origin>("app", "origin", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<ExtractionMethod>("app", "extraction_method", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<MedicalRecordType>("app", "medical_record_type", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<FinancialRecordType>("app", "financial_record_type", pgNameTranslator);
+        modelBuilder.HasPostgresEnum<RecurrencePeriod>("app", "recurrence_period", pgNameTranslator);
 
         // Apply all entity configurations from this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FamilyOsDbContext).Assembly);

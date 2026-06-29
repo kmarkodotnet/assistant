@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using System.Globalization;
+using System.Text.Json.Serialization;
 
 // Bootstrap logger (no IFormatProvider overload in CreateBootstrapLogger; use formatProvider in WriteTo)
 Log.Logger = new LoggerConfiguration()
@@ -53,6 +54,9 @@ builder.Services.AddSingleton<IProcessingProgressNotifier, SignalRProgressNotifi
 
 // Override NullNotificationPusher with real SignalR implementation
 builder.Services.AddScoped<IInAppNotificationPusher, SignalRNotificationPusher>();
+
+builder.Services.ConfigureHttpJsonOptions(opts =>
+    opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

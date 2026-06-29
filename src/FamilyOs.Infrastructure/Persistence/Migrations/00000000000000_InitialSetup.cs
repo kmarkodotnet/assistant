@@ -1,7 +1,11 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+using FamilyOs.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace FamilyOs.Infrastructure.Persistence.Migrations;
 
+[DbContext(typeof(FamilyOsDbContext))]
+[Migration("00000000000000_InitialSetup")]
 public partial class InitialSetup : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

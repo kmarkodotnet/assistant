@@ -6,7 +6,8 @@ using System.Text.Json;
 namespace FamilyOs.Api.IntegrationTests;
 
 [Trait("Category", "Integration")]
-public sealed class ProblemDetailsFormatTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class ProblemDetailsFormatTests(FamilyOsTestFixture fixture)
 {
     [Fact]
     public async Task NotFound_ReturnsProblemDetailsWithTraceId()

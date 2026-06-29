@@ -5,7 +5,8 @@ using System.Net.Http.Json;
 namespace FamilyOs.Api.IntegrationTests;
 
 [Trait("Category", "Integration")]
-public sealed class AuthFlowTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class AuthFlowTests(FamilyOsTestFixture fixture)
 {
     [Fact]
     public async Task Login_WithValidAdminToken_Returns200AndCookie()
@@ -13,6 +14,12 @@ public sealed class AuthFlowTests(FamilyOsTestFixture fixture) : IClassFixture<F
         var resp = await fixture.Client.PostAsJsonAsync(
             "/api/v1/auth/login/google",
             new { idToken = "admin-token" });
+
+        if (resp.StatusCode != HttpStatusCode.OK)
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Login failed with {resp.StatusCode}: {body}");
+        }
 
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         resp.Headers.Should().ContainKey("Set-Cookie");

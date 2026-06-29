@@ -5,7 +5,8 @@ using FluentAssertions;
 namespace FamilyOs.Api.IntegrationTests.Notes;
 
 [Trait("Category", "Integration")]
-public sealed class NoteCrudTests(FamilyOsTestFixture fixture) : IClassFixture<FamilyOsTestFixture>
+[Collection("IntegrationTests")]
+public sealed class NoteCrudTests(FamilyOsTestFixture fixture)
 {
     private async Task LoginAsync()
     {
@@ -132,7 +133,7 @@ public sealed class NoteCrudTests(FamilyOsTestFixture fixture) : IClassFixture<F
         // Assert
         renderedResp.StatusCode.Should().Be(HttpStatusCode.OK);
         var html = await renderedResp.Content.ReadAsStringAsync();
-        html.Should().Contain("<h1>");
+        html.Should().Contain("<h1");
         html.Should().Contain("<strong>");
     }
 

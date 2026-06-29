@@ -18,7 +18,11 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Fam
             .UseNpgsql(
                 config.GetConnectionString("DefaultConnection")
                     ?? "Host=localhost;Port=5432;Database=family_os;Username=family_migrator;Password=changeme",
-                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "app"))
+                npgsql =>
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history", "app");
+                    npgsql.UseVector();
+                })
             .UseSnakeCaseNamingConvention();
 
         return new FamilyOsDbContext(optionsBuilder.Options);

@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Text.Json;
 
 namespace FamilyOs.Application.Audit;
@@ -24,7 +25,7 @@ public sealed class ExportAuditLogQueryHandler(IFamilyOsDbContext db)
             .ToListAsync(cancellationToken);
 
         var isCsv = !string.Equals(request.Format, "json", StringComparison.OrdinalIgnoreCase);
-        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
         if (isCsv)
         {

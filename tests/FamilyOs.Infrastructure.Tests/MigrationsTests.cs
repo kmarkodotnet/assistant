@@ -21,7 +21,11 @@ public sealed class MigrationsTests : IAsyncLifetime
         var options = new DbContextOptionsBuilder<FamilyOsDbContext>()
             .UseNpgsql(
                 _postgres.GetConnectionString(),
-                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "app"))
+                npgsql =>
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history", "app");
+                    npgsql.UseVector();
+                })
             .UseSnakeCaseNamingConvention()
             .Options;
 
