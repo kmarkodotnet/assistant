@@ -134,7 +134,7 @@ A `Infrastructure` projekt **nem** ismeri az AI providereket — azok az
 
 ### 3.5 Api (`FamilyOs.Api`)
 
-- ASP.NET Core 8 Minimal API.
+- ASP.NET Core Minimal API (**.NET 10 LTS** — a kód `net10.0`-t céloz).
 - Endpoint-csoportok modulokba szervezve (`Endpoints/DocumentsModule.cs`,
   `Endpoints/SearchModule.cs`, …).
 - Cross-cutting middleware: exception handler (ProblemDetails),
@@ -303,7 +303,7 @@ Az alkalmazás akkor is működjön, ha a felhasználó később lokálisról cl
   "Ai": {
     "DefaultProvider": "ollama",
     "Providers": {
-      "ollama":    { "BaseUrl": "http://ollama:11434", "Model": "gpt-oss:20b" },
+      "ollama":    { "BaseUrl": "http://ollama:11434", "Model": "llama3.2:3b" },
       "anthropic": { "ApiKey": "<env>",                 "Model": "claude-haiku-4-5-20251001" }
     },
     "TaskAssignments": {
@@ -358,8 +358,10 @@ business priority-vel rendelkezik. A Hangfire ezzel szemben egy
 5. Sikeres befejezésnél: status = Completed, output_payload_json kitöltve;
    hiba esetén: status = Failed, error_message, AttemptCount++,
    next_attempt_utc = now + backoff
-6. A scheduler legközelebb felveszi újra a Failed + next_attempt_utc <= now
-   sorokat is.
+6. A scheduler a Queued ÉS a Failed + next_attempt_utc <= now sorokat
+   együtt veszi fel (a partial index mindkét státuszt fedi:
+   `WHERE status IN ('Queued','Failed')` — database-schema.md 4.16);
+   a retry nem állítja vissza Queued-ra a státuszt.
 ```
 
 **Idempotencia.** Az `AiJobExecutor`-nak idempotensnek kell lennie:
@@ -386,9 +388,10 @@ A `Reminder` tábla **nem** kerül be Hangfire BackgroundJob-ként a teremtésko
   `Scheduled AND trigger_utc <= now()` sorokra.
 - Találat: a `INotificationService.DispatchAsync`-et hívja, a státuszt
   `Fired`-re állítja.
-- Catch-up: indításnál ugyanaz a szkennelés `now() - 7 days`-tól,
-  hogy a PC offline ablakában esedékessé vált emlékeztetőket egyben
-  feldolgozza (`acknowledged_utc IS NULL`).
+- Catch-up: indításnál ugyanaz a szkennelés `now() - 14 days`-tól
+  (konfigurálható: `Reminders.CatchUpMaxAgeDays`, lásd reminder-engine.md
+  6.2), hogy a PC offline ablakában esedékessé vált emlékeztetőket egyben
+  feldolgozza; a 14 napnál régebbiek `Skipped`-be kerülnek.
 
 ---
 
@@ -480,9 +483,11 @@ kódbázis-szintű refaktor.
 
 **Service-ek:**
 - `web` — Angular build kiszolgálva nginx-ből, `/api` proxy a `api`-ra.
-- `api` — `FamilyOs.Api`, csak LAN interfész + Tailscale-kompatibilis bridge,
-  Kestrel TLS-mentes a belső hálózaton, reverse proxy (nginx) tesz HTTPS-t
-  belső CA tanúsítvánnyal.
+- `api` — `FamilyOs.Api`, csak LAN interfész (ADR-0003 — VPN/Tailscale
+  tudatosan nem cél), Kestrel TLS-mentes a belső hálózaton, reverse proxy
+  (nginx) tesz HTTPS-t belső CA tanúsítvánnyal. (Fejlesztésben, HTTP-n a
+  `__Host-` cookie-prefix nem működik — dev-környezetben sima cookie-név
+  a kivétel.)
 - `workers` — `FamilyOs.Workers`, nincs publikus port, csak DB és Ollama
   felé hív.
 - `postgres` — `pgvector/pgvector:pg16` image, perzisztens volume.
@@ -533,12 +538,17 @@ kódbázis-szintű refaktor.
       - IDocumentTextExtractor.ExtractAsync → tisztított text
       - upsert DocumentText
       - update Document.processing_status = Extracting
-      - új AiProcessingJob: Embed, Summarize, Classify, ExtractDeadlines, ExtractTasks
-        (mind Queued, ugyanabban a tranzakcióban)
+      - új AiProcessingJob: DetectLanguage
+   [Workers] DetectLanguage után: 5 párhuzamos AiProcessingJob
+             (Classify, Summarize, ExtractDeadlines, ExtractTasks, Embed),
+             processing_status = Analyzing; a Classify facet-találata
+             ExtractFacet jobot láncol (ai-pipeline.md 3.8)
    [Workers] sorra futtatja: minden AI step külön AiProcessingJob
                               külön Hangfire job-ban
-   [Workers] végül: Document.processing_status = Done
-                    Domain esemény: DocumentProcessed → SignalR push az UI-nak
+   [Workers] végül: PipelineOrchestrator finalizál —
+                    Done (ha nem mind Failed) / Failed (ha mind az)
+                    Realtime push a Workers-ből MVP-ben nincs (ADR-0008);
+                    a UI polling/refresh útján frissül
 ```
 
 ### 11.2 Természetes nyelvű kérdés (UC-02)
@@ -576,7 +586,14 @@ kódbázis-szintű refaktor.
   metrikák: AI job queue méret/típus, AI hívás latency, OCR latency,
   reminder dispatch count, DB pool használat.
 - **Egészségellenőrzés:** `/healthz/live` (process up) és `/healthz/ready`
-  (DB + Ollama elérhető).
+  (DB elérhető → ready; az Ollama állapota csak *degraded* jelzés a
+  válaszban, nem buktatja a readiness-t — a feltöltés, listázás,
+  strukturált keresés AI nélkül is működik).
 - **Verzió:** `/api/v1/system/version` — git sha + build date.
 - **Adminisztrációs felület:** `/admin/jobs` (csak admin) — `AiProcessingJob`
   retry / cancel; Hangfire dashboard `/hangfire`.
+- **SignalR hosting:** a hubokat (`/realtime/notifications`,
+  `/realtime/documents`) kizárólag az `Api` process hosztolja; a `Workers`
+  MVP-ben nem push-ol (no-op notifier, ADR-0008) — worker-oldali események
+  a kliens polling/refresh útján jutnak el a UI-ra. Post-MVP irány: belső
+  HTTP-hívás a Workers → Api irányban.

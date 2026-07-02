@@ -38,7 +38,7 @@ szabályt lehet, formatter / analyzer / lint kényszeríti. A többi a
 
 ### 2.1 Verzió, beállítások
 
-- **.NET 8 LTS.** TargetFramework `net8.0`.
+- **.NET 10 LTS.** TargetFramework `net10.0` (a kód ezt célozza).
 - `Directory.Build.props`:
   ```xml
   <PropertyGroup>
@@ -229,7 +229,9 @@ public sealed class Reminder
     {
         if (triggerUtc.Kind != DateTimeKind.Utc)
             throw new DomainException("Reminder.TriggerUtc must be UTC.");
-        return new Reminder { Id = Guid.NewGuid(), TaskId = taskId, ... };
+        // Id: UUIDv7 (IUuidGenerator / UuidV7Generator — lásd
+        // database-schema.md 6.; Guid.NewGuid() [v4] TILOS entitás-ID-re)
+        return new Reminder { Id = UuidV7.NewV7(), TaskId = taskId, ... };
     }
 
     public static Reminder ForDeadline(Guid deadlineId, ...) { /* analóg */ }
@@ -453,7 +455,7 @@ public sealed class DocumentsEndpointTests : IClassFixture<FamilyOsTestFixture>
 export class DocumentCardComponent {
   doc = input.required<DocumentDto>();
   selected = input<boolean>(false);
-  approve = output<Guid>();
+  approve = output<string>();   // ID-k TS-oldalon stringek
 
   showSuggestionBanner = computed(() => this.doc().origin === 'AiSuggested');
 }
@@ -525,7 +527,10 @@ internal static class DocumentsModule
         var group = app.MapGroup("/api/v1/documents").RequireAuthorization();
 
         group.MapPost("", UploadDocumentAsync)
-             .DisableAntiforgery()
+             .DisableAntiforgery()   // multipart API-upload: SameSite cookie
+                                     // + Idempotency-Key véd; anti-forgery
+                                     // token itt kiváltva (security-privacy
+                                     // 9.3 alóli dokumentált kivétel)
              .WithName("UploadDocument");
 
         return app;
@@ -622,8 +627,8 @@ CI „warning gate" (PR mehet, de figyelmeztet):
 ### 14.1 XML doc-comment
 
 - Public Application interface (Abstractions/Ai/*, Storage/*): kötelező
-  `<summary>` magyarul **vagy** angolul (csapatdöntés: az `IDocumentTextExtractor`
-  XML doc-ja angolul, mert a metódus neve és szignatúrája is angol).
+  `<summary>` **angolul** (döntés: az identifierek és a logok is angolok —
+  1.1 elv; magyar csak a user-facing szövegekben).
 - Public domain entity factory metódus: rövid `<summary>` angolul.
 - Belső class-ok: nem kötelező; ha a név magától beszél, nem kell.
 

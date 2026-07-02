@@ -1,0 +1,26 @@
+# "Erős PC" felülbírálás — a postgres + ollama service-eket futtatja egy
+# külön, teljesítményesebb gépen, amikor a Raspberry Pi 32-bit OS-en fut és
+# ezért nem tudja futtatni a pgvector/ollama image-eket (nincs 32-bit
+# variánsuk). Lásd docs/deploy-raspberry-pi.md 5. szakasz.
+#
+# Az alap docker-compose.yml-ben a postgres/ollama nem publikál portot a
+# hosztra (csak a compose-belső Docker hálózaton érhető el más
+# konténerekből) — ez a fájl felnyitja őket a LAN-ra, hogy a Pi-n futó
+# api/workers elérje őket a hálózaton keresztül.
+#
+# Használat ezen a gépen:
+#   docker compose -f docker-compose.yml -f docker-compose.strong-pc.yml up -d --no-deps postgres ollama
+#   (vagy: make strong-pc-up)
+#
+# A Pi oldalon a .env-ben állítsd be ennek a gépnek a LAN IP-jét:
+#   DB_HOST=192.168.1.50
+#   OLLAMA_HOST=192.168.1.50
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  ollama:
+    ports:
+      - "11434:11434"

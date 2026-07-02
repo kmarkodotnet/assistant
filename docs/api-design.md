@@ -102,7 +102,8 @@ Válasz:
 }
 ```
 
-- `pageSize` max 100; ha túl nagyot kér, 400 + magyar üzenet.
+- `pageSize` max 100 (kivétel: audit-log export/lista max 200, lásd 19.1);
+  ha túl nagyot kér, 400 + magyar üzenet.
 - `sort` formátum `mező:asc|desc`. Több sort vesszővel.
 - `cursor`-alapú pagination (a `nextCursor` mező) opcionális, a search
   válaszainál használt.
@@ -121,9 +122,12 @@ Minden endpoint-specifikációban kiírjuk:
 
 ### 1.9 Idempotencia
 
-A 202-vel záruló POST-okra a kliens **kötelezően** küld `Idempotency-Key`-t
-(GUID). A backend 24 órán át megőrzi a `(user, key)` → response mappingot;
-duplikált hívás ugyanazt a választ adja vissza.
+A hosszú futású vagy nem-idempotens kritikus POST-okra (dokumentum-upload,
+reprocess, sync — az endpoint-leírás jelzi) a kliens **kötelezően** küld
+`Idempotency-Key`-t (GUID). A backend a `(user, key)` → response mappingot
+**best-effort, memóriában** őrzi (célérték 24 óra; process-restart üríti —
+MVP-vállalás, Postgres-tár v2); duplikált hívás ugyanazt a választ adja
+vissza. A tartalmi dedup-ot ettől függetlenül a sha256 (7.1) védi.
 
 ### 1.10 OpenAPI
 
@@ -169,7 +173,9 @@ PATCH-nél kötelezően `If-Match` header-ben vagy body-ban.
 ## 3. Auth
 
 ### 3.1 `POST /api/v1/auth/login/google`
-**Cél:** Google OAuth ID token validáció + session cookie.
+**Cél:** Google ID token validáció + session cookie
+([ADR-0005](decisions/ADR-0005-auth-flow-id-token.md) — kliens-oldali
+GIS flow; login-redirect-URI nincs).
 - Body: `{ "idToken": "..." }`
 - Válasz 200: `CurrentUserDto`. Set-Cookie: `__Host-family-os-session`.
 - Hiba: 401 (érvénytelen token), 403 (email nincs az allowlist-en).
@@ -263,7 +269,10 @@ PATCH-nél kötelezően `If-Match` header-ben vagy body-ban.
   `isPrivate?`, `documentDate?`.
 - `Idempotency-Key` kötelező.
 - Válasz **201** + `DocumentDto` (`processingStatus = Pending`).
-- 409 ha sha256 dedup: a body tartalmazza a meglévő rekord ID-t.
+- 409 ha sha256 dedup: a body tartalmazza a meglévő rekord ID-t —
+  **kivéve**, ha a meglévő rekord a current user számára nem látható
+  (más user privát dokumentuma): ekkor generikus 409, ID nélkül
+  (információ-szivárgás elkerülése).
 - 415 nem támogatott MIME.
 - **Policy:** `RequireAdult`.
 
@@ -293,7 +302,10 @@ PATCH-nél kötelezően `If-Match` header-ben vagy body-ban.
 
 ### 7.7 `PATCH /api/v1/documents/{id}/text`
 - Body: `{ content }`. Manual correction.
-- A módosítás újragenerálási joboot indít (Embed + Summarize).
+- A módosítás újragenerálási jobokat indít: **Embed + Summarize**
+  (tudatos szűkítés — a Deadline/Task-kinyerés nem fut újra
+  automatikusan, mert a már jóváhagyott javaslatokat duplikálná;
+  igény esetén a 7.12 reprocess endpointtal kérhető).
 - **Policy:** `RequireAdult` + row-level.
 
 ### 7.8 `PATCH /api/v1/documents/{id}`
@@ -438,7 +450,7 @@ Mindegyik 200 + frissített `TaskDto`. Audit log bejegyzés keletkezik.
 | Nyugtázás | `POST /api/v1/reminders/{id}/acknowledge` |
 | Halasztás | `POST /api/v1/reminders/{id}/snooze` Body: `{ minutes: 60 }` vagy `{ until: "..." }` |
 | Mellőzés (kihagyom) | `POST /api/v1/reminders/{id}/skip` |
-| Mégse | `DELETE /api/v1/reminders/{id}` |
+| Mégse | `DELETE /api/v1/reminders/{id}` — a reminder táblán nincs soft delete; a művelet `Status := Cancelled` |
 | Delegálás | `POST /api/v1/reminders/{id}/delegate` Body: `{ familyMemberId }` |
 
 ---
@@ -638,6 +650,13 @@ események összegezve:
   - `documentFailed({ documentId, error })`
 
 A hubokra ugyanaz a cookie-alapú auth alkalmazódik.
+
+> **MVP-korlát ([ADR-0008](decisions/ADR-0008-workers-realtime-jelzes.md)):**
+> a hubokat az Api process hosztolja; a Workers-ben keletkező események
+> (feldolgozási progress, reminder-tüzelés) MVP-ben **nem** érkeznek
+> valós időben — a kliens polling/refresh útján frissül. Az olvasatlan
+> értesítés-számláló a `GET /api/v1/notifications?onlyUnread=true`
+> feed-ből számolódik (nincs külön unread-count endpoint).
 
 ---
 

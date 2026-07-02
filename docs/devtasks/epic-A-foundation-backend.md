@@ -91,8 +91,9 @@ csontváz, (2) PostgreSQL séma és EF Core, (3) Google OAuth + cookie session
 - **Függőség:** T-ABE-04.
 
 ### T-ABE-06 — Enum-típusok PostgreSQL-ben
-- **Cél:** 22 enum `CREATE TYPE` (lásd `database-schema.md` §2, v0.2 a
-  `Cancelled` és `ExternalApiCall` értékekkel együtt).
+- **Cél:** a `database-schema.md` §2 teljes enum-készlete `CREATE TYPE`-pal
+  (v0.2: `Cancelled` és `ExternalApiCall` értékekkel együtt; egyes
+  entitásoknál — pl. AiProcessingJob — string-tárolás, lásd séma §6).
 - **Fájlok:**
   - ugyanaz a `InitialSetup` migráció vagy külön `CreateEnums.cs`.
   - `src/FamilyOs.Domain/Enums/*.cs` (C# oldali enumok).

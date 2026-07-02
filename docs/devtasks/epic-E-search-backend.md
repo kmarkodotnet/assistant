@@ -162,7 +162,8 @@ validáció).
 - **Fájlok:**
   - `src/FamilyOs.Api/RateLimiting/SearchRateLimitPolicy.cs`
 - **AC:**
-  - [ ] Hangfire `RateLimitOptions` user-szinten.
+  - [ ] `Microsoft.AspNetCore.RateLimiting` middleware, user-szintű
+        partícióval (security-privacy.md 9.7).
   - [ ] 429 magyar ProblemDetails.
 
 ### T-EBE-15 — Search endpoint

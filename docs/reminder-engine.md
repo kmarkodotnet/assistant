@@ -71,10 +71,16 @@ A `Deadline` időpontjához képest relatívan definiált: „1 nappal előtte",
 
 ### 2.4 Deadline-alapú emlékeztető (deadline-based)
 
-Egy `Deadline` jóváhagyásakor a `ai-pipeline.md` 3.10 szakasz default
-policy-ja alapján 1–3 relatív emlékeztető generálódik (pl. Insurance →
-30/7/1 nap előtti). Ezek mind 2.3 típusú relatív emlékeztetők,
-ugyanahhoz a Deadline-hoz kötve.
+Egy `Deadline` **jóváhagyásakor** (`POST /deadlines/{id}/approve`) a
+`DefaultReminderPolicy` alapján 1–3 relatív emlékeztető generálódik
+([ADR-0009](decisions/ADR-0009-reminder-generalas-es-csatorna.md)) —
+csak a jövőbeli trigger-időpontokra. A default offsetek (a kód szerint,
+normatív): Insurance 30/7/1 · Inspection 30/7 · Invoice 14/3 ·
+Subscription 14/3 · Medical 7/1 · School 7/1 · egyéb 7/1 nap; csatorna
+mindig `InApp` (email az eszkalációnál vagy explicit user-reminderrel).
+**A javaslat-fázisban (Origin=AiSuggested Deadline) reminder NEM
+születik** — így jóváhagyatlan szülőjű `Scheduled` reminder nem
+létezhet, a dispatcher szülő-ellenőrzése csak defenzív guard.
 
 ### 2.5 Eszkalációs emlékeztető (escalation)
 
@@ -119,10 +125,11 @@ keletkezik magasabb `EscalationLevel`-en, opcionálisan másik csatornán
 
 `ReminderStatus = { Scheduled, Fired, Acknowledged, Skipped, Failed, Cancelled }`
 
-> Megj.: a `Cancelled` érték a `database-schema.md` enumjából hiányzik — a
-> migrációban hozzáadjuk: `ALTER TYPE app.reminder_status ADD VALUE 'Cancelled';`.
+> Megj.: a `Cancelled` a database-schema.md v0.2 óta része az enumnak.
 > Indok: a `Skipped` egy automatikus „nem ért időben oda" kategória, a
-> `Cancelled` egy explicit user-akció — érdemes szétválasztani.
+> `Cancelled` egy explicit user-akció. Az API `DELETE /reminders/{id}`
+> művelete `Status := Cancelled`-et jelent (nincs soft delete a
+> reminder táblán).
 
 ### 3.2 Átmenetek
 
@@ -193,7 +200,8 @@ felelőssége vizuálisan kiemelni a lecsúszott elemeket.
 
 Indexek: `(TargetUserAccountId, CreatedUtc DESC) WHERE ReadUtc IS NULL`.
 
-Ezt a táblát hozzáadjuk a `database-schema.md` v0.2-höz.
+A tábla normatív definíciója: `database-schema.md` 4.17.1 (v0.2 óta része
+a sémának) — az itteni táblázat csak áttekintés.
 
 ### 5.2 Email (opcionális MVP)
 
@@ -214,15 +222,15 @@ nem épít.
 
 ### 5.4 Felhasználói preferenciák
 
-Egy egyszerű per-user beállítás (a `UserAccount`-on bővítve, vagy külön
-`NotificationPreference` táblában):
+Egy egyszerű per-user beállítás — a megvalósításban a **`user_account`
+tábla oszlopaiként** (database-schema.md 4.2, v0.3):
 
 | Beállítás | Default | Megj. |
 |---|---|---|
-| `EmailEnabled` | false | per user opt-in |
-| `QuietHoursStart` | 22:00 | helyi időben |
-| `QuietHoursEnd` | 07:00 | |
-| `EscalationOptOut` | false | true esetén nem kap eszkalációt |
+| `EmailEnabled` | true | per user kapcsolható |
+| `QuietHoursStart` | NULL (nincs csendes óra) | 'HH:mm', helyi időben |
+| `QuietHoursEnd` | NULL | |
+| `EscalationOptOut` | — | **nem implementált (v2)** |
 
 A csendes órák alatt a `Fired` események NEM küldenek aktív értesítést;
 az InApp feedbe bekerülnek (ott látja amikor visszanéz), de email nem
@@ -251,8 +259,10 @@ Body:
 
   for each reminder:
       - load Task vagy Deadline (XOR)
-      - check that parent is approved (Origin in (Manual, AiApproved))
-          NEM approved → skip, ne tüzelj
+      - defenzív guard: parent approved (Origin in (Manual, AiApproved))?
+          NEM approved → WARN log + reminder.status = Cancelled
+          (ADR-0009 óta ilyen sor nem keletkezhet — ha mégis van, adathiba,
+           nem hagyjuk a scan-ben ragadni)
       - check that parent is not deleted / cancelled
           deleted/cancelled → reminder.status = Cancelled
       - check current user quiet-hours
@@ -300,8 +310,9 @@ FROM   app.reminder r
 WHERE  r.status = 'Fired'
   AND  r.acknowledged_utc IS NULL
   AND  r.fired_utc < now() - escalation_timeout(r)
-  AND  NOT EXISTS (SELECT 1 FROM reminder e
-                   WHERE e.task_id = r.task_id OR e.deadline_id = r.deadline_id
+  AND  NOT EXISTS (SELECT 1 FROM app.reminder e
+                   WHERE (e.task_id     IS NOT DISTINCT FROM r.task_id
+                      AND e.deadline_id IS NOT DISTINCT FROM r.deadline_id)
                      AND e.escalation_level = r.escalation_level + 1)
   AND  r.escalation_level < max_level(r);
 
@@ -340,11 +351,14 @@ a `(source_kind, deadline_category, task_priority)` triple-ön.
 
 ### 7.2 Reminder-generálás idempotenciája
 
-- AI-generált default reminder set (3.10 az ai-pipeline.md-ben): ugyanazon
+- Default reminder set (jóváhagyáskor, ADR-0009): ugyanazon
   `(deadline_id, offset_minutes_before_due)` kombináció már létezik?
-  → skip. Indok: az AI pipeline újrafutása nem hoz létre duplikátumot.
-- Recurring rule alapú új `Reminder` generálás: PRIMARY KEY a `(task_id
-  OR deadline_id) + trigger_utc` unique → adatbázis védi a duplikációt.
+  → skip. Indok: az ismételt approve nem hoz létre duplikátumot.
+- Recurring rule alapú új `Reminder` generálás: **alkalmazás-szintű**
+  védelem — az új occurrence beszúrása előtt ellenőrizzük, hogy azonos
+  `(task_id/deadline_id, trigger_utc, escalation_level)` sor nem
+  létezik-e. (DB-szintű unique index szándékosan nincs: a snooze és az
+  eszkaláció legitim módon hozhat létre azonos szülő+trigger párost.)
 
 ---
 
@@ -353,15 +367,16 @@ a `(source_kind, deadline_category, task_priority)` triple-ön.
 ### 8.1 Új Deadline jóváhagyása → emlékeztető-ütemezés
 
 ```
-1. AI-pipeline javasol egy Deadline-t (Origin=AiSuggested) +
-   3 Reminder-t a default policy alapján (Origin=AiSuggested, mind Scheduled).
+1. AI-pipeline javasol egy Deadline-t (Origin=AiSuggested) — reminder
+   ekkor még NEM születik (ADR-0009).
 2. User UI-on: "Elfogadom" gomb a Deadline-on.
-3. Backend: ApproveSuggestedDeadlineCommand
-   - Deadline.Origin = AiApproved
-   - kapcsolódó Reminder-ek Origin = AiApproved
+3. Backend: ApproveDeadlineCommand
+   - Deadline.Origin = AiApproved, approved_by/utc kitöltve
+   - a DefaultReminderPolicy szerinti Reminder-ek LÉTREJÖNNEK
+     (csak jövőbeli triggerekre, channel=InApp, Scheduled)
    - audit log
-4. A DueReminderDispatcher legközelebbi szkennelése már elismeri a
-   tüzelhetőséget (parent Origin in (Manual, AiApproved)).
+4. A DueReminderDispatcher a szokásos szkenneléssel tüzeli őket
+   esedékességkor.
 ```
 
 ### 8.2 Recurring havi reminder

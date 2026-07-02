@@ -1,7 +1,12 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# --legacy-peer-deps: a package-lock.json-ban van egy @angular/animations
+# <-> @angular/common peer-verzió ütközés, amit a helyi fejlesztői
+# node_modules toleránsabb (régebbi) npm-mel installálva sosem ütött ki,
+# de tiszta konténerbeli telepítésnél (node:22-alpine friss npm-mel) elakad.
+# Ez a build-időre szűkített workaround, nem oldja meg a lockfile-t.
+RUN npm install --legacy-peer-deps
 COPY frontend/ .
 RUN npm run build:prod
 

@@ -103,8 +103,9 @@ Vezérlőelvek:
   SELECT  dc.document_id AS source_id, 'Document' AS source_type,
           dc.chunk_index, dc.content,
           1 - (dc.embedding <=> q.v) AS similarity
-  FROM    app.document_chunk dc, q
+  FROM    app.document_chunk dc
   JOIN    app.document d ON d.id = dc.document_id
+  CROSS   JOIN q
   WHERE   d.deleted_utc IS NULL
     AND   (d.is_private = false OR d.created_by_user_account_id = :current_user)
     AND   dc.embedding_model = :current_model
@@ -192,7 +193,7 @@ implementálja.
 ### 4.1 Folyamat
 
 ```
-1. Intent classification (lokálisan, NTextCat + szabályok):
+1. Intent classification (lokális, szabály-alapú — lásd 5. szakasz):
    - "filter"   : strukturált listázás (pl. "kifizetetlen számlák")
    - "lookup"   : konkrét tény (pl. "mikor jár le X")
    - "find"     : dokumentum/jegyzet megtalálása (pl. "hol van Y garancia")
@@ -274,8 +275,11 @@ A költség kisebb, mint egy téves intent miatti üres lista.
 
 ### 5.3 Slot-kinyerés
 
-A slot-eket (dátumtartomány, családtag, kategória) ugyanaz a hívás adja
-vissza, mint a Q&A LLM prompt — egyetlen extra mező a kimenetben:
+A slot-kinyerés (dátumtartomány, családtag, kategória) a **retrieval
+előtt** fut, külön kis LLM-hívással (`extract-search-slots` prompt) vagy
+szabályokkal — az eredménye szűkíti a retrieval-t (4.1/2. lépés). A Q&A
+válasz emellett visszaadja a ténylegesen alkalmazott slotokat a UI
+chip-jeihez:
 
 ```json
 {
@@ -304,18 +308,24 @@ public IQueryable<Document> ApplyVisibility(IQueryable<Document> q, CurrentUser 
 {
     if (u.Role == UserRole.Admin) return q;
 
+    if (u.Role == UserRole.Child)
+        // ADR-0007: child csak a hozzá kötött, nem-privát rekordokat látja
+        return q.Where(d => !d.IsPrivate
+                        && d.RelatedFamilyMemberId == u.FamilyMemberId);
+
     return q.Where(d => !d.IsPrivate
                     || d.CreatedByUserAccountId == u.UserAccountId
-                    || /* spouse-share: az Adult role partner is láthatja
-                         a nem private rekordokat — config-bound */);
+                    /* + MedicalRecord partner-spouse kivétel a facet-szintű
+                       szabályban (security-privacy.md 4.3) */);
 }
 ```
 
 - **Private rekord** csak a tulajdonosnak (és adminnak) látszik.
 - **MedicalRecord** alapból `IsPrivate = true`, és a default láthatóság
   csak a `family_member` saját UserAccount-jához + adminokhoz tartozik.
-- **Child** szerepkör csak az `IsPrivate = false` rekordokat és a saját
-  `family_member`-rel kapcsolt rekordokat látja.
+- **Child** szerepkör ([ADR-0007](decisions/ADR-0007-child-szerepkor-rbac.md),
+  normatív mátrix: security-privacy.md 4.1): **csak olvasás**, és csak a
+  hozzá kötött (`related_family_member_id` = saját) nem-privát rekordok.
 
 A szűrés **adatbázis-szintű** WHERE-be kerül, nem post-filter; így a relevancia-
 ranking sem szivárogtat („találat van X dokumentumon, de nem mondom el, mi az").

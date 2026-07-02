@@ -49,8 +49,8 @@ megkülönböztető szolgáltatás**.
 ### T-GBE-03 — `IcalRecurrenceEvaluator` (RRULE)
 - **Cél:** RFC 5545 RRULE → következő trigger.
 - **Fájlok:**
-  - `src/FamilyOs.Infrastructure.Ai/Recurrence/IcalRecurrenceEvaluator.cs`
-    (`Ical.Net` csomag).
+  - `src/FamilyOs.Infrastructure/Recurrence/IcalRecurrenceEvaluator.cs`
+    (`Ical.Net` csomag — nem AI-függő, ezért nem az Infrastructure.Ai-ba).
 - **AC:**
   - [ ] Adott RRULE + utolsó tüzelés → következő tüzelés.
   - [ ] Hibás RRULE → `DomainBusinessRuleException`.
@@ -173,7 +173,10 @@ megkülönböztető szolgáltatás**.
   - [ ] `notificationCreated(NotificationDto)` event.
   - [ ] `reminderFired(ReminderDto)` sticky toast event.
   - [ ] `aiSuggestionReady(SuggestionSummaryDto)` event.
-  - [ ] A worker `IHubContext`-en publikál (server-to-server).
+  - [ ] **MVP-korlát (ADR-0008):** a Workers nem push-ol — a
+        reminder-tüzelés a `notification_feed`-be íródik, a kliens a
+        feed lekérdezésekor / pollingkor látja. SignalR push csak
+        Api-oldali eseményekre.
 
 ### T-GBE-14 — Retention job a notification feed-re
 - **Cél:** 90 napnál régebbi `read` rekordok takarítása.

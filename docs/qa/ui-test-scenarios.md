@@ -267,7 +267,13 @@ Javaslat: ha ezen oldalak stabilizálódnak, kapjanak `data-testid`-t a
   üzenetet mutatja (lásd `QA-C4-BUG` lentebb)
 - Automatizálva: `frontend/e2e/documents/documents-flow.spec.ts`
 
-**QA-C4-BUG — 🐞 Hiba: a kinyert szöveg soha nem tölthető be/szerkeszthető 🚫**
+**QA-C4-BUG — 🐞 Hiba: a kinyert szöveg soha nem tölthető be/szerkeszthető — ✅ JAVÍTVA (2026-07-02)**
+
+> **Feloldás:** a `document-detail.page.ts` a Szöveg tab aktiválásakor
+> (`selectTab('text')`) automatikusan betölti a szöveget (`loadText()`);
+> 404 esetén marad a „folyamatban van" üzenet. A `QA-C4-01`
+> (szöveg-megtekintés + szerkesztés golden path) forgatókönyv így már
+> megírható 📋. Az eredeti hibaleírás referenciaként alább.
 - **Megfigyelés:** `document-detail.page.ts` Szöveg tab template-je:
   `docText()` csak akkor jelenik meg (és csak akkor van "Szerkesztem" gomb),
   ha `docText()` már nem `null` — de az egyetlen hely, ami `docText`-et
@@ -374,8 +380,9 @@ releváns.
 - Automatizálva: `frontend/e2e/reminders/reminders-flow.spec.ts`
 
 **QA-G6-01 — Navbar csengő jelvény olvasatlan számmal 📋**
-- **Given** a `GET /api/v1/notifications/unread-count` mockolt válasza
-  `{totalCount: 3}`
+- **Given** a `GET /api/v1/notifications?onlyUnread=true` mockolt válasza
+  3 olvasatlan elemet ad (nincs külön unread-count endpoint — a számláló
+  a feed-ből számolódik, api-design.md 22.)
 - **When** bármelyik oldal betöltődik
 - **Then** a `navbar-bell-badge` "3"-at mutat
 
@@ -556,6 +563,5 @@ cd frontend && pnpm e2e:ui
 5. **Natív `confirm()` a Notes/Topics oldalon** inkonzisztens a
    `ui-confirm-dialog` komponenssel — UX-egységesítési backlog-item
    javasolt, ami egyúttal a tesztelhetőséget is javítaná.
-6. **`QA-C4-BUG`**: a dokumentum-részletek Szöveg tabja jelenleg soha nem
-   tölti be a kinyert szöveget (lásd C epic szakasz) — ez terméki hiba,
-   nem tesztelési hiányosság, mielőbbi javítást igényel.
+6. **`QA-C4-BUG`**: ✅ javítva (2026-07-02) — a Szöveg tab aktiváláskor
+   betölti a szöveget; a `QA-C4-01` golden path forgatókönyv megírható.

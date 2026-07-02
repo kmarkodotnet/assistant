@@ -36,7 +36,7 @@ type Tab = 'overview' | 'text' | 'tags';
             @for (tab of tabs; track tab.id) {
               <button
                 [attr.data-testid]="'detail-tab-' + tab.id"
-                (click)="activeTab.set(tab.id)"
+                (click)="selectTab(tab.id)"
                 [class.border-b-2]="activeTab() === tab.id"
                 [class.border-primary-600]="activeTab() === tab.id"
                 [class.text-primary-700]="activeTab() === tab.id"
@@ -114,15 +114,29 @@ export class DocumentDetailPage implements OnInit {
 
   ngOnInit(): void { void this.facade.loadDetail(this.id()); }
 
+  selectTab(tab: Tab): void {
+    this.activeTab.set(tab);
+    if (tab === 'text' && !this.docText() && !this.loadingText()) {
+      void this.loadText();
+    }
+  }
+
+  private async loadText(): Promise<void> {
+    this.loadingText.set(true);
+    try {
+      const text = await firstValueFrom(this.api.getText(this.id()));
+      this.docText.set(text);
+    } catch {
+      // 404: a szöveg még nincs kinyerve — marad a "folyamatban van" üzenet
+    } finally {
+      this.loadingText.set(false);
+    }
+  }
+
   async startEditText(): Promise<void> {
     if (!this.docText()) {
-      this.loadingText.set(true);
-      try {
-        const text = await firstValueFrom(this.api.getText(this.id()));
-        this.docText.set(text);
-      } finally {
-        this.loadingText.set(false);
-      }
+      await this.loadText();
+      if (!this.docText()) { return; }
     }
     this.editedContent = this.docText()?.content ?? '';
     this.editingText.set(true);

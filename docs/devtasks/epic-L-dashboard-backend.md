@@ -34,7 +34,8 @@ A handler 3-4 párhuzamos query-vel optimalizál.
   - `src/FamilyOs.Application/Dashboard/GetDashboardHandler.cs`
 - **AC:**
   - [ ] 4 párhuzamos `Task<>`: deadlines, suggestions count, recent docs,
-        overdue reminders.
+        overdue reminders — **query-nként külön DbContext**
+        (`IDbContextFactory`), mert a DbContext nem thread-safe.
   - [ ] Saved searches gyors single query.
   - [ ] p95 < 200 ms 5 év szimulált adaton (lásd database-schema.md §8).
 

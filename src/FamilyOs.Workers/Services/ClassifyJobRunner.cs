@@ -120,6 +120,21 @@ public sealed class ClassifyJobRunner
             existingDocTopics.Add(topic.Id);
         }
 
+        // Facet chaining: if classification identified a facet type, enqueue ExtractFacet
+        if (result.FacetType is "Warranty" or "Medical" or "Financial")
+        {
+            var hasPendingFacetJob = await _db.AiProcessingJobs.AnyAsync(
+                j => j.TargetId == job.TargetId
+                     && j.JobType == AiJobType.ExtractFacet
+                     && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct);
+
+            if (!hasPendingFacetJob)
+            {
+                await _db.AiProcessingJobs.AddAsync(
+                    AiProcessingJob.Create(AiJobType.ExtractFacet, job.TargetId), ct);
+            }
+        }
+
         await _db.SaveChangesAsync(ct);
 
         await _notifier.NotifyProgressAsync(job.TargetId, "Classify", 100, ct);

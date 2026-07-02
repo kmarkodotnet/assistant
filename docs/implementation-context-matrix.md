@@ -284,7 +284,7 @@ de a chunkolás analóg.
 | frontend-structure.md | ★★ | §8.10 (Settings page) |
 | ai-pipeline.md | ★ | §1 (vezérlőelvek — privacy mód) |
 | ADR-0003 (LAN-only) | ★ | K3 backup off-site stratégiához |
-| reminder-engine.md | ★ | §5.2 (SMTP konfig) — K3 nem érinti, de K1 SMTP relay K3-mal együtt |
+| reminder-engine.md | ★ | §5.2 (SMTP konfig) — a G5 email-csatorna rendszer-beállításai a Settings oldalon (K2) jelennek meg |
 
 **Tipikus betöltés:** ~35k token.
 
@@ -394,7 +394,7 @@ review keresztkapcsolatokat ellenőriz:
   vonatkozó ★★★ és ★★ szintű doksik (a fenti mátrix szerint), valamint
   a `security-privacy.md` minden olyan szakasza, ami az adott epicben
   szerepel.
-- **Kötelező plusz a sonnet csomaghoz képest:** `security-privacy.md` §17
+- **Kötelező plusz a sonnet csomaghoz képest:** `security-privacy.md` §13.3
   (privacy assertions), `api-design.md` §1.3 (ProblemDetails), `domain-model.md`
   §0 (közös konvenciók).
 

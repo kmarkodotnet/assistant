@@ -1,6 +1,6 @@
 # Adatbázis séma — Family OS
 
-> Státusz: DRAFT v0.2 · Dátum: 2026-06-26 · Nyelv: magyar
+> Státusz: v0.3 · Dátum: 2026-07-02 · Nyelv: magyar
 > Kapcsolódó: [domain-model.md](domain-model.md), [architecture.md](architecture.md)
 > Rögzített döntések: [ADR-0001 pgvector](decisions/ADR-0001-vektor-tarolas-pgvector.md),
 > [ADR-0002 Tesseract](decisions/ADR-0002-ocr-tesseract.md)
@@ -23,7 +23,30 @@ pótlások itt aktívvá válnak:
    is_manually_edited := true`. Visszaállításhoz az `original_content`
    még elérhető.
 
-Ez a dokumentum a PostgreSQL fizikai sémáját rögzíti EF Core 8+ kontextusban.
+## Változások a v0.2 óta (v0.3 — 2026-07-02, a megvalósult kódhoz igazítva)
+
+1. **`CREATE DATABASE` locale-javítás** — a `LC_COLLATE`/`LC_CTYPE`
+   libc-locale-t vár; az ICU-locale külön `ICU_LOCALE` paraméter (1.1).
+2. **`timestamptz` defaultok** — `now() AT TIME ZONE 'UTC'` helyett
+   mindenhol `now()` (a korábbi forma `timestamp`-et ad vissza, amit a
+   szerver időzónája szerint konvertálna vissza — hibaforrás).
+3. **Új táblák a megvalósításból** (4.21): `pending_invite` (meghívók +
+   login-allowlist bővítés), `revoked_session` (logout utáni cookie-tiltás),
+   `saved_search` (mentett keresések, E7).
+4. **`user_account` preferencia-oszlopok** (4.2): `email_enabled`,
+   `quiet_hours_start`, `quiet_hours_end` — a B3 story a megvalósításban
+   oszlopokként került a `user_account`-ra, nem külön táblába.
+   (`escalation_opt_out` nem implementált — v2.)
+5. **`ai_processing_job` queue-index pontosítás** (4.16): a worker a
+   `Queued` ÉS `Failed` sorokat együtt veszi fel
+   (`WHERE status IN ('Queued','Failed')`), a retry nem állítja vissza
+   `Queued`-ra a státuszt.
+6. **Enum-tárolás megjegyzés** (6.): néhány entitásnál (pl.
+   `AiProcessingJob.JobType`/`Status`) a megvalósítás `HasConversion<string>`
+   + `varchar` tárolást használ a natív pg-enum helyett; új érték
+   (pl. `ExtractFacet`) így migráció nélkül bővíthető.
+
+Ez a dokumentum a PostgreSQL fizikai sémáját rögzíti EF Core kontextusban.
 A séma a `domain-model.md`-ből származik; az ott bevezetett közös konvenciók
 (`Id Guid`, UTC timestampek, soft delete, `RowVersion`) itt fizikai típusokra
 fordítódnak.
@@ -41,15 +64,18 @@ trigger részeket külön `__InitialSetup` migrációba helyezzük (raw SQL).
 ```sql
 CREATE DATABASE family_os
     ENCODING = 'UTF8'
-    LC_COLLATE = 'hu-HU-x-icu'
-    LC_CTYPE   = 'hu-HU-x-icu'
     TEMPLATE   = template0
     LOCALE_PROVIDER = 'icu'
-    ICU_LOCALE = 'hu-HU';
+    ICU_LOCALE = 'hu-HU'
+    LC_COLLATE = 'C.UTF-8'
+    LC_CTYPE   = 'C.UTF-8';
 ```
 
 Indok: az ICU-alapú magyar collation rendezést és LIKE viselkedést helyesen
-kezeli ékezetes szövegekre (`á`, `é`, `ő`, `ű`).
+kezeli ékezetes szövegekre (`á`, `é`, `ő`, `ű`). Megjegyzés: a
+`LC_COLLATE`/`LC_CTYPE` mindig *libc* locale-t vár (az ICU-t az
+`ICU_LOCALE` adja) — ICU-nem-létező libc locale megadása hibát dob; a
+`C.UTF-8` a `pgvector/pgvector:pg16` image-ben elérhető.
 
 ### 1.2 Extensions
 
@@ -101,6 +127,12 @@ GRANT ALL ON SCHEMA app TO family_migrator;
 A backend a `family_app` role-lal csatlakozik (kevesebb jog), a migrációk
 külön connection stringgel a `family_migrator` szereppel futnak.
 
+> **Hard delete megjegyzés:** az admin `?hard=true` fizikai törléshez
+> (api-design.md 7.9) a `family_app` role célzott `GRANT DELETE`-et kap a
+> `document` táblára és a cascade-elt gyerektáblákra (`document_text`,
+> `document_chunk`, `document_summary`, join-táblák, facet-táblák) — az
+> `audit_log`-ra a REVOKE változatlanul érvényes.
+
 ---
 
 ## 2. Enum típusok
@@ -143,7 +175,7 @@ CREATE TYPE app.recurrence_period AS ENUM ('None','Monthly','Quarterly','Yearly'
 CREATE OR REPLACE FUNCTION app.set_updated_utc()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.updated_utc := now() AT TIME ZONE 'UTC';
+    NEW.updated_utc := now();
     RETURN NEW;
 END $$;
 ```
@@ -168,8 +200,8 @@ a `app.` prefixet a CREATE-ekben írom ki, az indexeknél nem ismétlem.
 
 Konvenciók a következőkben:
 - `id uuid PRIMARY KEY` mindenhol.
-- `created_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')`.
-- `updated_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')` + trigger.
+- `created_utc timestamptz NOT NULL DEFAULT now()`.
+- `updated_utc timestamptz NOT NULL DEFAULT now()` + trigger.
 - `deleted_utc timestamptz NULL` ott, ahol soft delete van.
 - `row_version` xmin alapon (EF Core `IsRowVersion()` → `xmin` system column).
 - `created_by_user_account_id` ahol a domain-model jelöli.
@@ -185,8 +217,8 @@ CREATE TABLE app.family_member (
     birth_date                  date NULL,
     has_user_account            boolean NOT NULL DEFAULT false,
     notes                       text NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_family_member_display_name_len CHECK (char_length(display_name) BETWEEN 1 AND 100),
     CONSTRAINT ck_family_member_full_name_len    CHECK (full_name IS NULL OR char_length(full_name) <= 200),
@@ -210,8 +242,11 @@ CREATE TABLE app.user_account (
     role                        app.user_role NOT NULL,
     last_login_utc              timestamptz NULL,
     is_active                   boolean NOT NULL DEFAULT true,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    email_enabled               boolean NOT NULL DEFAULT true,   -- B3 preferencia (v0.3)
+    quiet_hours_start           varchar(5) NULL,                 -- 'HH:mm' (v0.3)
+    quiet_hours_end             varchar(5) NULL,                 -- 'HH:mm' (v0.3)
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_user_account_email_lower      CHECK (email = lower(email))
 );
@@ -235,8 +270,8 @@ CREATE TABLE app.source (
     config_json                 jsonb NOT NULL DEFAULT '{}'::jsonb,
     is_active                   boolean NOT NULL DEFAULT true,
     last_sync_utc               timestamptz NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL
 );
 CREATE INDEX ix_source_kind_active ON app.source(kind, is_active) WHERE deleted_utc IS NULL;
@@ -266,8 +301,8 @@ CREATE TABLE app.email_message (
     has_attachments             boolean NOT NULL DEFAULT false,
     ingest_status               app.ingest_status NOT NULL DEFAULT 'Pending',
     processed_utc               timestamptz NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX ux_email_message_source_gmail_id
     ON app.email_message(source_id, gmail_message_id);
@@ -299,8 +334,8 @@ CREATE TABLE app.document (
     processing_status           app.processing_status NOT NULL DEFAULT 'Pending',
     origin                      app.origin NOT NULL,
     created_by_user_account_id  uuid NOT NULL REFERENCES app.user_account(id) ON DELETE RESTRICT,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_document_size  CHECK (size_bytes > 0),
     CONSTRAINT ck_document_sha   CHECK (char_length(sha256) = 64)
@@ -342,8 +377,8 @@ CREATE TABLE app.document_text (
                                                                         -- vs. content-tel dolgozunk-e
     tsv                         tsvector
         GENERATED ALWAYS AS (to_tsvector('hungarian_unaccent', content)) STORED,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX ix_document_text_tsv
     ON app.document_text USING gin (tsv);
@@ -362,7 +397,7 @@ CREATE TABLE app.document_chunk (
     token_count                 int NOT NULL,
     embedding                   vector(768) NOT NULL,        -- nomic-embed-text dim
     embedding_model             text NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_chunk_index   CHECK (chunk_index >= 0),
     CONSTRAINT ck_chunk_tokens  CHECK (token_count > 0)
 );
@@ -391,7 +426,7 @@ CREATE TABLE app.document_summary (
     model                       text NOT NULL,
     prompt_version              text NOT NULL,
     is_current                  boolean NOT NULL DEFAULT true,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_summary_len   CHECK (char_length(summary_text) >= 10)
 );
 CREATE UNIQUE INDEX ux_document_summary_current
@@ -411,8 +446,8 @@ CREATE TABLE app.tag (
     name                        text NOT NULL,
     color                       text NULL,
     usage_count                 int NOT NULL DEFAULT 0,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_tag_name_len  CHECK (char_length(name) BETWEEN 1 AND 40),
     CONSTRAINT ck_tag_name_chars CHECK (name ~ '^[a-zA-Z0-9áéíóöőúüűÁÉÍÓÖŐÚÜŰ _\-]+$'),
@@ -434,8 +469,8 @@ CREATE TABLE app.topic (
     parent_topic_id             uuid NULL REFERENCES app.topic(id) ON DELETE RESTRICT,
     icon                        text NULL,
     sort_order                  int NOT NULL DEFAULT 0,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_topic_slug    CHECK (slug ~ '^[a-z0-9-]+$')
 );
@@ -453,7 +488,7 @@ CREATE TABLE app.document_tag (
     tag_id                      uuid NOT NULL REFERENCES app.tag(id)      ON DELETE CASCADE,
     assigned_by_user_account_id uuid NULL    REFERENCES app.user_account(id) ON DELETE SET NULL,
     origin                      app.origin NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (document_id, tag_id)
 );
 CREATE INDEX ix_document_tag_tag ON app.document_tag(tag_id);
@@ -463,7 +498,7 @@ CREATE TABLE app.document_topic (
     topic_id                    uuid NOT NULL REFERENCES app.topic(id)    ON DELETE CASCADE,
     assigned_by_user_account_id uuid NULL    REFERENCES app.user_account(id) ON DELETE SET NULL,
     origin                      app.origin NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (document_id, topic_id)
 );
 CREATE INDEX ix_document_topic_topic ON app.document_topic(topic_id);
@@ -482,8 +517,8 @@ CREATE TABLE app.note (
     created_by_user_account_id  uuid NOT NULL REFERENCES app.user_account(id) ON DELETE RESTRICT,
     tsv                         tsvector
         GENERATED ALWAYS AS (to_tsvector('hungarian_unaccent', coalesce(title,'') || ' ' || body)) STORED,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_note_title_len CHECK (char_length(title) BETWEEN 1 AND 200),
     CONSTRAINT ck_note_body_len  CHECK (char_length(body)  >= 1)
@@ -501,7 +536,7 @@ CREATE TABLE app.note_chunk (
     token_count                 int NOT NULL,
     embedding                   vector(768) NOT NULL,
     embedding_model             text NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')
+    created_utc                 timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX ux_note_chunk_note_idx ON app.note_chunk(note_id, chunk_index);
 CREATE INDEX ix_note_chunk_embed_hnsw
@@ -512,7 +547,7 @@ CREATE TABLE app.note_tag (
     note_id                     uuid NOT NULL REFERENCES app.note(id) ON DELETE CASCADE,
     tag_id                      uuid NOT NULL REFERENCES app.tag(id)  ON DELETE CASCADE,
     origin                      app.origin NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (note_id, tag_id)
 );
 
@@ -520,7 +555,7 @@ CREATE TABLE app.note_topic (
     note_id                     uuid NOT NULL REFERENCES app.note(id) ON DELETE CASCADE,
     topic_id                    uuid NOT NULL REFERENCES app.topic(id) ON DELETE CASCADE,
     origin                      app.origin NOT NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (note_id, topic_id)
 );
 ```
@@ -543,8 +578,8 @@ CREATE TABLE app.task (
     approved_utc                    timestamptz NULL,
     completed_utc                   timestamptz NULL,
     created_by_user_account_id      uuid NOT NULL REFERENCES app.user_account(id) ON DELETE RESTRICT,
-    created_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                     timestamptz NOT NULL DEFAULT now(),
+    updated_utc                     timestamptz NOT NULL DEFAULT now(),
     deleted_utc                     timestamptz NULL,
     CONSTRAINT ck_task_title_len    CHECK (char_length(title) BETWEEN 1 AND 200),
     CONSTRAINT ck_task_suggested_origin
@@ -575,8 +610,8 @@ CREATE TABLE app.deadline (
     origin                          app.origin NOT NULL,
     approved_by_user_account_id     uuid NULL REFERENCES app.user_account(id) ON DELETE SET NULL,
     approved_utc                    timestamptz NULL,
-    created_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                     timestamptz NOT NULL DEFAULT now(),
+    updated_utc                     timestamptz NOT NULL DEFAULT now(),
     deleted_utc                     timestamptz NULL,
     CONSTRAINT ck_deadline_title    CHECK (char_length(title) BETWEEN 1 AND 200)
 );
@@ -604,8 +639,8 @@ CREATE TABLE app.reminder (
     acknowledged_utc                timestamptz NULL,
     escalation_level                int NOT NULL DEFAULT 0,
     origin                          app.origin NOT NULL,
-    created_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                     timestamptz NOT NULL DEFAULT now(),
+    updated_utc                     timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_reminder_xor      CHECK (
         (task_id IS NOT NULL)::int + (deadline_id IS NOT NULL)::int = 1
     ),
@@ -643,12 +678,14 @@ CREATE TABLE app.ai_processing_job (
     error_message               text NULL,
     input_payload_json          jsonb NULL,
     output_payload_json         jsonb NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX ix_aijob_queue
-    ON app.ai_processing_job(priority, next_attempt_utc)
-    WHERE status = 'Queued';
+    ON app.ai_processing_job(next_attempt_utc, created_utc)
+    WHERE status IN ('Queued','Failed');
+-- A worker a Queued ÉS a Failed (next_attempt_utc <= now()) sorokat
+-- együtt veszi fel; a retry NEM állítja vissza Queued-ra a státuszt.
 CREATE INDEX ix_aijob_target
     ON app.ai_processing_job(target_entity_type, target_entity_id);
 CREATE INDEX ix_aijob_type_status
@@ -662,7 +699,7 @@ CREATE TRIGGER trg_aijob_set_updated BEFORE UPDATE ON app.ai_processing_job
 ```sql
 CREATE TABLE app.audit_log (
     id                          uuid PRIMARY KEY,
-    occurred_utc                timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    occurred_utc                timestamptz NOT NULL DEFAULT now(),
     user_account_id             uuid NULL REFERENCES app.user_account(id) ON DELETE SET NULL,
     action                      app.audit_action NOT NULL,
     entity_type                 text NULL,
@@ -712,7 +749,7 @@ CREATE TABLE app.notification_feed (
     related_entity_id           uuid NULL,
     reminder_id                 uuid NULL REFERENCES app.reminder(id) ON DELETE SET NULL,
     read_utc                    timestamptz NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_notification_title CHECK (char_length(title) BETWEEN 1 AND 200),
     CONSTRAINT ck_notification_body  CHECK (char_length(body)  BETWEEN 1 AND 2000)
 );
@@ -754,8 +791,8 @@ CREATE TABLE app.warranty (
     warranty_end_date               date NULL,
     seller                          text NULL,
     related_family_member_id        uuid NULL REFERENCES app.family_member(id) ON DELETE SET NULL,
-    created_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                     timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                     timestamptz NOT NULL DEFAULT now(),
+    updated_utc                     timestamptz NOT NULL DEFAULT now(),
     deleted_utc                     timestamptz NULL,
     CONSTRAINT ck_warranty_price    CHECK (purchase_price IS NULL OR purchase_price >= 0),
     CONSTRAINT ck_warranty_currency CHECK (currency IS NULL OR currency ~ '^[A-Z]{3}$'),
@@ -780,8 +817,8 @@ CREATE TABLE app.medical_record (
     title                       text NOT NULL,
     structured_json             jsonb NULL,
     is_private                  boolean NOT NULL DEFAULT true,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL
 );
 CREATE INDEX ix_medical_member_date  ON app.medical_record(family_member_id, record_date DESC)
@@ -809,8 +846,8 @@ CREATE TABLE app.financial_record (
     is_paid                     boolean NOT NULL DEFAULT false,
     recurrence_period           app.recurrence_period NOT NULL DEFAULT 'None',
     related_family_member_id    uuid NULL REFERENCES app.family_member(id) ON DELETE SET NULL,
-    created_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
-    updated_utc                 timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'),
+    created_utc                 timestamptz NOT NULL DEFAULT now(),
+    updated_utc                 timestamptz NOT NULL DEFAULT now(),
     deleted_utc                 timestamptz NULL,
     CONSTRAINT ck_financial_amount   CHECK (amount IS NULL OR amount >= 0),
     CONSTRAINT ck_financial_currency CHECK (currency IS NULL OR currency ~ '^[A-Z]{3}$'),
@@ -824,6 +861,40 @@ CREATE INDEX ix_financial_vendor_trgm
     ON app.financial_record USING gin (vendor gin_trgm_ops) WHERE deleted_utc IS NULL;
 CREATE TRIGGER trg_financial_set_updated BEFORE UPDATE ON app.financial_record
     FOR EACH ROW EXECUTE FUNCTION app.set_updated_utc();
+```
+
+### 4.21 pending_invite, revoked_session, saved_search (v0.3)
+
+A megvalósítás során bevezetett kiegészítő táblák (a migrációk szerint):
+
+```sql
+-- Meghívók: az admin által meghívott e-mail + cél családtag + szerep.
+-- Login-kor a GoogleAuthHandler feloldja; az allowlist = appsettings
+-- Auth.AllowedEmails ∪ pending_invite.email.
+CREATE TABLE app.pending_invite (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    email             varchar(320) NOT NULL,
+    family_member_id  uuid NOT NULL REFERENCES app.family_member(id) ON DELETE CASCADE,
+    role              varchar(50) NOT NULL,
+    created_utc       timestamptz NOT NULL DEFAULT now()
+);
+
+-- Visszavont session-ök: logout után a cookie session-id-je ide kerül,
+-- a cookie-validáció minden requesten ellenőrzi.
+CREATE TABLE app.revoked_session (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id  varchar(256) NOT NULL UNIQUE,
+    revoked_utc timestamptz NOT NULL DEFAULT now()
+);
+
+-- Mentett keresések (E7) — dashboard widget forrása.
+CREATE TABLE app.saved_search (
+    id              uuid PRIMARY KEY,
+    name            text NOT NULL,
+    query_json      text NOT NULL,
+    user_account_id uuid NOT NULL REFERENCES app.user_account(id) ON DELETE CASCADE,
+    created_utc     timestamptz NOT NULL DEFAULT now()
+);
 ```
 
 ---
@@ -897,10 +968,11 @@ További családtagokat az admin vesz fel.
 
 ## 7. Migrációs stratégia
 
-- **Forrásrend.** `dotnet ef migrations add <Name>` az `Infrastructure` projektben;
-  futtatás `dotnet ef database update` vagy alkalmazás-startup-on
-  `db.Database.Migrate()` (lokális dev only) / külön `migrate` Docker
-  parancs prod-on.
+- **Forrásrend.** `dotnet ef migrations add <Name>` az `Infrastructure`
+  projektben; futtatás az API indulásakor automatikusan (`MigrateAsync`) —
+  single-tenant, egygépes környezetben ez a vállalt egyszerűsítés
+  (migráció előtt kötelező backup, DELIVERY.md 6.). Kézi futtatásra a
+  `dotnet ef database update` a `family_migrator` connection stringgel.
 - **Kézi SQL.** A pgvector, pg_trgm, unaccent, custom collation, ICU locale
   beállítása, trigger-függvények, FTS konfiguráció **nem EF-conventionálisak** —
   külön `__InitialSetup` migrációban raw SQL-lel kerülnek be (`migrationBuilder.Sql(...)`).

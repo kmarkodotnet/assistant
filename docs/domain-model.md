@@ -1,9 +1,28 @@
 # Domain modell — Family OS
 
-> Státusz: DRAFT v0.1 · Dátum: 2026-06-26 · Nyelv: magyar
+> Státusz: v0.2 · Dátum: 2026-07-02 · Nyelv: magyar
 > Kapcsolódó: [product-vision.md](product-vision.md), [database-schema.md](database-schema.md)
 > Rögzített döntések: [ADR-0001 pgvector](decisions/ADR-0001-vektor-tarolas-pgvector.md),
-> [ADR-0004 Gmail API](decisions/ADR-0004-email-gmail-api.md)
+> [ADR-0004 Gmail API](decisions/ADR-0004-email-gmail-api.md),
+> [ADR-0009 reminder-generálás](decisions/ADR-0009-reminder-generalas-es-csatorna.md)
+
+## Változások a v0.1 óta (v0.2 — 2026-07-02, séma v0.2/v0.3-mal szinkronban)
+
+1. `ReminderStatus` enum: új **`Cancelled`** érték (explicit user-akció,
+   elválasztva az automatikus `Skipped`-től). Remindernél nincs soft
+   delete — az API `DELETE /reminders/{id}` = `Status := Cancelled`.
+2. `AuditAction` enum: új **`ExternalApiCall`** érték (Gmail/SMTP hívások).
+3. Új entitás: **`NotificationFeed`** (InApp kézbesítési napló) — definíció
+   a [database-schema.md 4.17.1](database-schema.md)-ben, ott normatív.
+4. `DocumentText`: új **`OriginalContent`** és **`IsManuallyEdited`** mezők
+   (C4 manuális szövegkorrekció előtti állapot megőrzése).
+5. Új kiegészítő entitások a megvalósításból: **`PendingInvite`**
+   (meghívó: email + családtag + szerep), **`RevokedSession`** (logout
+   utáni session-tiltólista), **`SavedSearch`** (mentett keresés, E7) —
+   séma: database-schema.md 4.21. A felhasználói preferenciák
+   (`EmailEnabled`, `QuietHoursStart/End`) a `UserAccount`-on élnek.
+6. `Reminder`: a default reminderek a Deadline **jóváhagyásakor**
+   generálódnak, nem a javaslatkor (ADR-0009).
 
 ---
 
@@ -24,7 +43,9 @@ egyedi szakaszokban):
 - **Privátság jelző:** `IsPrivate : bool` az érzékeny entitásokon
   (`Document`, `Note`, `MedicalRecord`, `FinancialRecord`); csak a tulajdonos
   és az adminok látják. (RBAC részletek: [security-privacy.md](security-privacy.md))
-- **Concurrency:** `RowVersion : bytea` (xmin alapú, EF Core convention).
+- **Concurrency:** `RowVersion` az `xmin` rendszeroszlopra képezve
+  (32 bites `uint` EF Core-ban, `UseXminAsConcurrencyToken()`); az API-n
+  base64 stringként utazik.
 - **Single-tenant feltételezés:** az MVP egy család (lásd Product Vision).
   Egy implicit `Family` entitást **nem** vezetünk be — minden családtag-szintű
   rekord közvetlen jogosultság-szabályok mentén él. Multi-family bevezetésekor
@@ -231,7 +252,7 @@ Felhasználó vagy AI hozza létre. Lapos szerkezet — nincs hierarchia.
 | Mező | Típus | Megj. |
 |---|---|---|
 | Id | Guid (PK) | |
-| Name | text | normalizált (lowercased, ékezetek megőrizve) |
+| Name | text | tároláskor lowercase-normalizált (ékezetek megőrizve); egyediség a normalizált néven |
 | Color | text? | hex (#rrggbb) UI-hoz |
 | UsageCount | int | denormalizált, gyors rendezéshez |
 
@@ -382,7 +403,7 @@ emlékeztetők az induláskor tüzelnek (lásd Reminder Engine doksi).
 | OffsetMinutesBeforeDue | int? | ha relatív (pl. „1 nappal előtte”); generáláshoz a TriggerUtc kiszámítva |
 | RecurrenceRule | text? | RFC 5545 (RRULE) string; NULL = egyszeri |
 | Channel | enum `NotificationChannel {InApp, Email}` | MVP: InApp kötelezően; Email opcionális |
-| Status | enum `ReminderStatus {Scheduled, Fired, Acknowledged, Skipped, Failed}` | |
+| Status | enum `ReminderStatus {Scheduled, Fired, Acknowledged, Skipped, Failed, Cancelled}` | `Cancelled` = explicit user-akció |
 | FiredUtc | timestamptz? | |
 | AcknowledgedUtc | timestamptz? | |
 | EscalationLevel | int | 0 = elsődleges, 1 = első eszkaláció, … |
@@ -517,7 +538,7 @@ sikeres/sikertelen login).
 | Id | Guid (PK) | |
 | OccurredUtc | timestamptz | |
 | UserAccountId | Guid? (FK) | null = rendszer |
-| Action | enum `AuditAction {Create, Update, Delete, Login, LoginFailed, Approve, Reject, AiCall, FileAccess, PermissionChange}` | |
+| Action | enum `AuditAction {Create, Update, Delete, Login, LoginFailed, Approve, Reject, AiCall, FileAccess, PermissionChange, ExternalApiCall}` | |
 | EntityType | text | a céltábla neve |
 | EntityId | Guid? | a céltábla rekord-azonosítója |
 | IpAddress | inet? | |

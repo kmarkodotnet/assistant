@@ -46,9 +46,10 @@ hogy minden további munka stabil alapra építsen.
 `database-schema.md` szerint létrejöjjön egyetlen migrációs pipeline-ban.
 
 **AC:**
-- Adott üres Postgres, és amikor `dotnet ef database update` fut, akkor
-  a 20 tábla, 22 enum, FTS config, extensions (pgvector, pg_trgm, unaccent),
-  triggerek (`set_updated_utc`, `audit_log_immutable`) létrejönnek.
+- Adott üres Postgres, és amikor a migrációk lefutnak, akkor a
+  `database-schema.md` v0.3 **teljes sémája** (minden tábla, enum, FTS
+  config, extensions — pgvector, pg_trgm, unaccent —, triggerek:
+  `set_updated_utc`, `audit_log_immutable`) létrejön.
 - Amikor a Workers indul, akkor a Hangfire séma is migrálódik (`hangfire`
   séma).
 - Seed adatok (topic-fa, default `Source`) idempotens módon betöltődnek.
@@ -111,7 +112,8 @@ healthcheck endpointokat, hogy lássam, működik-e a rendszer.
 **AC:**
 - Serilog console + rotating file (`/var/log/family-os/`).
 - `traceparent` header end-to-end (FE → API → Workers, ha alkalmazható).
-- `/healthz/live` és `/healthz/ready` HTTP 200, ha DB és Ollama elérhető.
+- `/healthz/live` HTTP 200; `/healthz/ready` HTTP 200 ha a DB elérhető
+  (az Ollama csak degraded-jelzés, nem buktat — architecture.md 12.).
 
 **Tasks:**
 - **BE:** Serilog config, OpenTelemetry minimal setup (csak trace MVP-ben).
@@ -154,9 +156,9 @@ hozzáférést kapjon.
 - Audit log bejegyzés a meghívásról és az aktiválásról.
 
 **Tasks:**
-- **BE:** invite entity (`UserAccountInvite` egyszerű tábla az MVP-ben, vagy
-  egyszerűen `UserAccount` `IsActive=false`-szal előlétrehozva); login
-  callback-ben aktiválás.
+- **BE:** invite entity — **döntés: `pending_invite` tábla**
+  (database-schema.md 4.21; email + familyMemberId + role); login-kor a
+  `GoogleAuthHandler` feloldja és aktiválja.
 - **FE:** invite dialog a Family oldalon.
 
 ---
@@ -172,8 +174,8 @@ nyugalmi időszakban.
 - A `quietHoursStart/End` érvényes 24h formátum (`HH:mm`).
 
 **Tasks:**
-- **BE:** preference store (a `UserAccount`-on JSONB mező, vagy külön
-  `user_preferences` tábla az MVP-ben).
+- **BE:** preference store — **döntés: oszlopok a `user_account`-on**
+  (`email_enabled`, `quiet_hours_start/end` — database-schema.md 4.2 v0.3).
 - **FE:** `/settings` saját szakasza.
 
 ---
@@ -277,7 +279,8 @@ ha az AI elszúrta → `POST /api/v1/documents/{id}/reprocess`.
 lokális Ollama implementációt, hogy a többi AI lépés ezen át hívjon.
 
 **AC:**
-- `OllamaAiProvider` implementálja a `IAiProvider`-t (`Complete`, `Stream`).
+- `OllamaAiProvider` implementálja a `IAiProvider`-t (`CompleteAsync`;
+  streaming v2 — api-design.md 25.).
 - Egy unit teszt mock provider-rel zöld.
 - `appsettings.json`-ban a default `LocalOnly`.
 - 503 ha az Ollama nem elérhető.
@@ -745,7 +748,9 @@ listák szűréséhez.
 
 **AC:**
 - `GET /api/v1/tags?q=` autocomplete < 50 ms.
-- Soft delete + reuse cont (`usage_count`).
+- Soft delete + használat-számláló (`usage_count`; karbantartás:
+  document_tag/note_tag insert → +1, unlink → −1, napi recompute
+  sanity-check).
 
 **Tasks:**
 - **BE:** `Tag` CRUD.
@@ -948,18 +953,21 @@ hozzárendelés (a részleteket a következő doksi adja).
 
 | Fázis | Cél | Tartalom (story-k) |
 |---|---|---|
-| 1 | Solution + CI | A1, A4, A5 |
+| 1 | Solution + CI | A1, A4 (váz), A5 (váz) |
 | 2 | DB és EF Core | A2, B1 |
-| 3 | Alap API + auth | A3, B2, B3, C1 (csak upload skeleton) |
-| 4 | Angular shell | A3 (FE), A5 (FE), C2 (skeleton) |
-| 5 | Dokumentum upload + tárolás | C1 (teljes), C2, C3 (skeleton) |
+| 3 | Alap API + auth | A3, A4 (teljes), B2, B3 |
+| 4 | Angular shell | A3 (FE), A4 (FE), A5 (FE), C2 (skeleton) |
+| 5 | Dokumentum upload + tárolás | C1 (teljes), C2, C3 (skeleton), C4, C5 |
 | 6 | Text extraction (PdfPig + Tesseract) | D1 (queue előkészület), D3, D4 |
 | 7 | AI absztrakció | D1 (teljes), D2 |
 | 8 | Summary + extraction + embedding | D5–D11 |
 | 9 | Search & Q&A | E1–E5 (E6/E7 opc.) |
-| 10 | Reminders & notifications | F1–F3, G1–G3, G6 |
-| 11 | Dashboard + topic/tag | I1, I2, L1 |
+| 10 | Reminders & notifications | F1–F3, G1–G3, G6 (G4/G5 best-effort) |
+| 11 | Dashboard + topic/tag/notes | H1, H2, I1, I2, L1, L2, F3 (FE) |
 | 12 | Hardening, tests, security | J1–J4, K1 (S), K2 (S), K3, M1–M4, security audit |
+
+> A fázis↔story leképezés **normatív forrása az `implementation-plan.md`**
+> — eltérés esetén az a mérvadó, ez a tábla csak áttekintés.
 
 **Total story count:** ~50 (Must: ~28, Should: ~18, Could: ~4)
 

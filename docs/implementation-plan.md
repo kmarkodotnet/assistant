@@ -98,8 +98,8 @@ sémája EF Core migrációval létrejön.
 1. `reminder_status` enum + `'Cancelled'` érték.
 2. `audit_action` enum + `'ExternalApiCall'` érték.
 3. Új `notification_feed` tábla a NotificationFeed entitásra.
-4. `Document.OriginalContent` opcionális mező a `C4` szövegkorrekció előtti
-   állapot megőrzéséhez.
+4. `document_text.original_content` opcionális mező + `is_manually_edited`
+   flag a `C4` szövegkorrekció előtti állapot megőrzéséhez.
 
 Ezeket ebben a fázisban átvezetjük a doksiba és a séma kódba egyaránt.
 
@@ -246,7 +246,8 @@ adat-funkció — csak az auth.
 **Cél:** felhasználó fel tud tölteni egy fájlt, az tárolódik fizikailag és
 a DB-ben; listázás megjelenik.
 
-**Backlog:** C1, C2 (BE+FE), C3 skeleton.
+**Backlog:** C1, C2 (BE+FE), C3 skeleton, **C4 (szöveg-kézikorrekció),
+C5 (törlés + reprocess)** — a devtasks epic-C ütemezésével összhangban.
 
 **Agent-routing:**
 - `backend-dev` — upload command, storage service, dedup.
@@ -509,7 +510,8 @@ működik.
 - `src/FamilyOs.Workers/Services/DueReminderDispatcher.cs`
   (1 perces recurring + `OnStarted` catch-up).
 - `src/FamilyOs.Workers/Services/EscalationScheduler.cs` (5 perces).
-- `src/FamilyOs.Infrastructure.Ai/Recurrence/IcalRecurrenceEvaluator.cs`.
+- `src/FamilyOs.Infrastructure/Recurrence/IcalRecurrenceEvaluator.cs`
+  (a recurrence nem AI-függő — nem az Infrastructure.Ai-ba való).
 - `src/FamilyOs.Api/Endpoints/RemindersModule.cs`,
   `NotificationsModule.cs`.
 - `src/FamilyOs.Api/Realtime/NotificationsHub.cs`.
@@ -578,8 +580,8 @@ adminisztrációval, tag autocomplete, suggestions inbox.
 - Rollback: a `/admin` és `/suggestions` oldalakat el lehet rejteni
   feature-flag-gel ha késik.
 
-**DoD:** `v0.11` tag, az MVP 8 UC-ja közül 6 (UC-01…UC-06, UC-07, UC-08
-kivételével) működik production-szerű környezetben.
+**DoD:** `v0.11` tag, az MVP use case-ei közül UC-01…UC-07 működik
+production-szerű környezetben (UC-08 Gmail a 12. fázisban érkezik).
 
 ---
 
@@ -592,7 +594,8 @@ kivételével) működik production-szerű környezetben.
 **Agent-routing:**
 - `code-reviewer` (opus) — teljes security review (`security-privacy.md`
   összes szakasza minimum-elvárás).
-- `devops` — Helm chart MVP-pótlék (de a Docker Compose marad az elsődleges),
+- `devops` — Docker Compose véglegesítés (a szállítási cél — Helm chart
+  az MVP-ben nem készül, [ADR-0010](decisions/ADR-0010-compose-first-helm-kivetel.md)),
   TLS belső CA-val, backup script, monitoring alap.
 - `doc-writer` (haiku) — `DELIVERY.md`, release notes.
 - `qa-playwright` — `@security` és `@e2e-pipeline` teljes futás.
@@ -607,7 +610,6 @@ kivételével) működik production-szerű környezetben.
 - `docker/nginx/`, `docker/nginx/Dockerfile`, `docker/nginx/family-os.conf`.
 - `scripts/backup.sh`, `scripts/restore.sh`, `scripts/init-tls-ca.sh`.
 - `docs/DELIVERY.md` — telepítési, üzemeltetési, incident runbook.
-- `helm/family-os/` — Helm chart (opcionális MVP).
 
 **Tesztek:**
 - Privacy assertion: `LocalOnly`-ben mocked `HttpClient` nem megy ki.

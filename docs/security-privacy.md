@@ -59,7 +59,9 @@ elvét követi.
 ### 2.3 Explicit nem-célok
 
 - DDoS védelem (LAN-only — irreleváns).
-- Anti-CSRF egy publikus webapp-ra (LAN-only, same-site cookie elég).
+- Publikus-webes szintű CSRF-védelmi apparátus — a SameSite cookie +
+  anti-forgery (9.3) marad defense-in-depth-ként, de publikus
+  fenyegetési modellre nem méretezzük.
 - Side-channel támadások a host gépen (PC fizikai biztonsága a felhasználó
   felelőssége).
 
@@ -67,29 +69,36 @@ elvét követi.
 
 ## 3. Hitelesítés (authentication)
 
-### 3.1 Google OAuth 2.0
+### 3.1 Google bejelentkezés
 
-- **Flow:** Authorization Code with PKCE.
+- **Flow:** kliens-oldali Google Identity Services `id_token` →
+  `POST /api/v1/auth/login/google` (lásd
+  [ADR-0005](decisions/ADR-0005-auth-flow-id-token.md)). Szerver-oldali
+  OAuth-redirect a loginhoz nincs; authorization-code flow kizárólag a
+  Gmail-integrációnál (K1) él.
 - **OpenID Connect** profil + email scope.
 - **Backend validáció:** a Google `id_token` aláírás-, kibocsátó-, lejárat-
-  és audience-validáció (`Microsoft.AspNetCore.Authentication.Google`).
-- **Engedélyezett `hd` (hosted domain) vagy email allowlist:** opcionálisan
-  konfigurálható — a Family OS alapból egy fix `allowed_emails` listát
-  használ (`appsettings.json` → `Auth.AllowedEmails`).
+  és audience-validáció.
+- **Allowlist:** a belépésre jogosult email-ek halmaza =
+  `appsettings.json → Auth.AllowedEmails` (statikus bootstrap-lista)
+  **∪** `pending_invite.email` (az admin runtime meghívói,
+  database-schema.md 4.21). A meghívó rögzíti a cél `FamilyMember`-t és
+  a kezdő szerepkört is.
 - **Első login bootstrap:** az `Auth.BootstrapAdmin` email cím első
-  login-ja `Role = Admin`-nal hozza létre az accountot. Minden további
-  email az allowlist-ről `Role = Child` kezdő szerepkört kap — az admin
-  felemeli, ha kell.
+  login-ja `Role = Admin`-nal hozza létre az accountot (FamilyMemberrel
+  együtt). Minden további email meghívóval lép be, és a meghívóban
+  rögzített szerepkört + családtag-kötést kapja.
 
 ### 3.2 Session
 
 - **Cookie:** HTTP-only, Secure (TLS LAN-belül), SameSite=Lax. Név:
   `__Host-family-os-session`.
 - **Tárolás:** ASP.NET Core Data Protection-szel titkosított cookie
-  (`CookieAuthenticationHandler`); nincs server-side session table.
-- **Élettartam:** 30 nap sliding expiration, 90 nap absolute. Manual
-  logout → cookie azonnali invalidálása + `RevokedSessions` (kis blacklist
-  tábla a re-use ellen).
+  (`CookieAuthenticationHandler`); a session-állapot a cookie-ban él,
+  szerver-oldalon csak egy kis **tiltólista** van
+  (`revoked_session` tábla, database-schema.md 4.21): logout-kor a cookie
+  session-id claim-je ide kerül, és a validáció minden requesten ellenőrzi.
+- **Élettartam:** 30 nap sliding expiration, 90 nap absolute.
 - **Inactivity timeout:** 7 nap idle után újra-auth (Google session
   szilent reauth, ha még él).
 
@@ -113,11 +122,17 @@ elvét követi.
 
 ### 4.1 Szerepkörök (RBAC)
 
-A három szerepkör (`Admin`, `Adult`, `Child`) értelmezése:
+A három szerepkör (`Admin`, `Adult`, `Child`) értelmezése. **Ez a mátrix a
+normatív forrás** (lásd [ADR-0007](decisions/ADR-0007-child-szerepkor-rbac.md));
+a többi dokumentum erre hivatkozik. A Child szerepkör **csak olvasás** —
+láthatósága a hozzá *kötött* (`related_family_member_id` = saját), nem-privát
+rekordokra korlátozódik; a rekord child-hoz kötése az explicit megosztási
+gesztus.
 
 | Művelet | Admin | Adult | Child |
 |---|:---:|:---:|:---:|
-| Saját rekord olvasás/írás | ✓ | ✓ | ✓ (csak saját, megosztott) |
+| Saját (hozzá kötött) rekord olvasás | ✓ | ✓ | ✓ (csak `!IsPrivate`) |
+| Bármilyen írás (create/update/delete) | ✓ | ✓ | ✗ |
 | Más adult rekordja (nem private) | ✓ | ✓ | ✗ |
 | Más adult rekordja (private) | ✓ | ✗ | ✗ |
 | Saját facet (Medical) olvasás | ✓ | ✓ | ✓ (csak ha hozzá kötött) |
@@ -164,8 +179,10 @@ Document:
   - Adult, isPrivate=false: olvasás (és írás, ha a related_family_member
     nem egy idegen private rekord)
   - Adult, isPrivate=true: tilt
-  - Child: csak ha related_family_member_id == current.FamilyMemberId
-    ÉS isPrivate=false
+  - Child: CSAK OLVASÁS, és csak ha related_family_member_id ==
+    current.FamilyMemberId ÉS isPrivate=false (ADR-0007);
+    írási endpointok Child számára policy-szinten is tiltottak
+    (RequireAdult)
 
 MedicalRecord:
   - admin: minden
@@ -341,25 +358,28 @@ A `PrivacyMode = LocalOnly` az alapértelmezett. Ez egy **kemény kapu**:
   feltételt ellenőriz először: `Config.PrivacyMode == LocalOnly &&
   provider.Name != "ollama"` → kivétel (`AiProviderNotAllowedException`).
 - A kivétel utat ad az audit logba (`AiCall` jelzéssel, error mezővel).
-- Ez a logika **nincs feature flagben** és nem kapcsolható ki konfigon —
-  csak kódmódosítással. A `factory-engineer` agent számára `CLAUDE.md`
-  szerint érinthetetlen terület.
+- **MVP-ben a kapu kódba égetett:** a `HybridAllowed` és `AnyProvider`
+  értékek léteznek a típusban, de az `AiProviderFactory` mindkettőre
+  `NotImplementedException`-t dob („post-MVP") — konfigurációval tehát
+  **nem** aktiválható cloud provider, függetlenül az `Ai.PrivacyMode`
+  beállítástól. A Settings/admin API a `PrivacyMode` módosítási kísérletet
+  422-vel utasítja el (api-design.md 21.2). A `factory-engineer` agent
+  számára `CLAUDE.md` szerint érinthetetlen terület.
 
-### 8.2 HybridAllowed mód
+### 8.2 HybridAllowed mód (post-MVP)
 
-- Lehetővé teszi a vegyes használatot (pl. embedding lokálisan, summary
-  cloud-on), de minden cloud-bound hívás előtt egy **explicit warning** és
-  user confirmation a UI-on (egyszeri opt-in családtag-tagonként,
-  napra/kategóriára).
-- Az MVP **nem** futtatja default-ban; az admin kapcsolja be (`Settings`
-  oldal).
+- Szándék: vegyes használat (pl. embedding lokálisan, summary cloud-on),
+  minden cloud-bound hívás előtt **explicit warning** és user confirmation
+  a UI-on (opt-in családtagonként, napra/kategóriára).
+- **MVP-ben nem elérhető** (a factory kivételt dob rá); bevezetése v2-ben,
+  külön ADR-rel és a 8.4–8.5 védelmek implementálásával együtt.
 
-### 8.3 AnyProvider mód
+### 8.3 AnyProvider mód (post-MVP)
 
-- Tetszőleges provider tetszőleges feladatra; nincs warning. A UI-on
-  vörös értesítés jelez, hogy a privát adatok cloud-ra mennek.
-- Csak fejlesztői / tesztelési használat — production deployment-en
-  letiltva (`appsettings.Production.json` → `Ai.PrivacyMode: LocalOnly`).
+- Szándék: tetszőleges provider tetszőleges feladatra; a UI-on vörös
+  jelzés, hogy a privát adatok cloud-ra mennek. Csak fejlesztői /
+  tesztelési használatra.
+- **MVP-ben nem elérhető** (ugyanaz a kódba égetett kivétel, mint 8.2).
 
 ### 8.4 Provider-szintű adatkezelési ígéretek
 
@@ -404,8 +424,11 @@ csak dokumentálja.
 - A `Note.Body` markdown — a backend HTML-re renderelt outputja
   sanitize-elve (`HtmlSanitizer` csomag, `unsafe-inline` script tag-ek
   letiltva).
-- CSP fejléc: `default-src 'self'; script-src 'self'; connect-src 'self'
-  /api/; img-src 'self' data:;` (LAN-only környezet ezt lehetővé teszi).
+- CSP fejléc: `default-src 'self'; script-src 'self'
+  https://accounts.google.com; connect-src 'self'; img-src 'self' data:;
+  frame-src https://accounts.google.com;` — a Google Identity Services
+  script/frame kivételével minden saját origin (a végleges direktíva-
+  készlet az nginx-confban, T-MOP-03).
 
 ### 9.3 CSRF
 
@@ -506,9 +529,11 @@ csak dokumentálja.
 ### 11.4 Frissítések
 
 - Konténer-image frissítés: admin manuális (`docker compose pull`).
-- Adatbázis-migráció: az API indulásánál fut, ha új migráció van; rollback
-  csak manuális SQL-lel (a EF Core migrations down-method generálódik, de
-  nem futtatjuk automatikusan).
+- Adatbázis-migráció: az API indulásánál automatikusan lefut (EF Core
+  `MigrateAsync` — single-tenant, egygépes környezetben ez a vállalt
+  egyszerűsítés; migráció előtt kötelező `make backup`, lásd DELIVERY.md 6.);
+  rollback csak manuális SQL-lel (a down-method generálódik, de nem
+  futtatjuk automatikusan).
 - **Soha automatikusan a `factory-engineer` agent nem deploy-ol éles
   migrációt** (lásd `CLAUDE.md` „2-es szint: önüzemeltetés" szakasz).
 

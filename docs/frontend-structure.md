@@ -21,8 +21,9 @@
   esetekre.
 - **Styling**: Tailwind CSS + Angular CDK (primitívek), nincs Material UI
   egész book — egyszerűbb, könnyebb magyar tipográfia.
-- **i18n**: `@angular/localize` magyar fő nyelvvel; egyetlen build, nincs
-  multi-locale build a fix `hu`-ra.
+- **i18n**: `@ngx-translate/core` + `assets/i18n/hu.json` (runtime,
+  egynyelvű magyar — a megvalósítás ezt használja; `@angular/localize`
+  build-time megoldásra csak többnyelvűsítésnél térnénk át).
 - **Tesztelés**: Vitest + Angular Testing Library + Playwright (E2E).
 - **Csomagkezelő**: pnpm.
 
@@ -192,7 +193,9 @@ export default [
 - **`authGuard`** — ha nincs current user (HTTP 401 a `/api/v1/auth/me`-re),
   redirect `/login`-ra a `returnUrl` query-paramwel.
 - **`roleGuard`** — a route-on `data.roles`-on definiált szerepkörök alapján;
-  ha a current user szerepe nem szerepel, 403 oldal.
+  elutasításkor a dashboardra (`/`) irányít vissza „Nincs jogosultságod
+  ehhez az oldalhoz." toast-tal (a megvalósult viselkedés; külön 403
+  oldal nincs).
 - **`hasUnsavedChangesGuard`** — szerkesztő oldalakon (`CanDeactivate`),
   ha a form `dirty`, megerősítő dialog.
 
@@ -477,7 +480,9 @@ localStorage, ne maradjon a logout után).
 - A `Suggested` oszlop sárga sávval, batch-Approve gombbal.
 
 ### 8.5 Deadlines (`/deadlines`)
-- Naptár-nézet (`@angular/cdk/calendar`) + lista nézet.
+- Naptár-nézet: **saját hónap-grid komponens** (Tailwind; a CDK-ban nincs
+  calendar, Material-t nem használunk — lásd devtasks T-FFE-08) + lista
+  nézet.
 - Filter: category, responsible, status.
 - Egy deadline-card kibontva: kapcsolódó `Reminder`-ek, default policy
   visualizáció ("7 nap előtt InApp + Email").
@@ -510,9 +515,10 @@ localStorage, ne maradjon a logout után).
 ### 8.10 Settings (`/settings`)
 - **Saját:** Display name, quiet hours, notification preferences
   (email enabled, escalation opt-out).
-- **Admin:** AI provider config (LocalOnly / Hybrid / AnyProvider, default
-  LocalOnly), Gmail integráció hozzáadás, SMTP konfiguráció, backup
-  útmutató link, audit log link.
+- **Admin:** AI provider lista (enabled/model szerkeszthető; a
+  **PrivacyMode read-only** „LocalOnly — kódba égetve, MVP-ben nem
+  módosítható" felirattal, lásd api-design.md 21.2), Gmail integráció
+  hozzáadás, SMTP konfiguráció, backup útmutató link, audit log link.
 
 ---
 
@@ -559,8 +565,8 @@ rá lehet húzni — felül egy sárga sáv „AI javasolta" felirattal, mellett
 
 ### 10.2 Mobil reszponzív
 
-- Breakpointok: `sm < 640px` (mobil), `md < 1024px` (tablet),
-  `lg ≥ 1024px` (desktop).
+- Breakpointok (Tailwind min-width szemlélet): mobil < 640px,
+  tablet ≥ `sm` (640px), desktop ≥ `lg` (1024px).
 - Mobile shell: bottom nav (5 ikon: Dashboard, Search, Suggestions,
   Reminders, More). Desktop shell: bal sidebar minden feature-rel.
 
@@ -568,11 +574,10 @@ rá lehet húzni — felül egy sárga sáv „AI javasolta" felirattal, mellett
 
 ## 11. i18n
 
-- `@angular/localize` magyar (`hu`) default.
-- Forrás fájl: `src/locale/messages.hu.xlf` (vagy `assets/i18n/hu.json`
-  egyszerűbb runtime megoldással `@ngx-translate/core`-ral — MVP-ben
-  utóbbi gyorsabb a fejlesztésnél, később `@angular/localize`-ra
-  migrálható).
+- **Döntés: `@ngx-translate/core`** runtime fordítással,
+  `assets/i18n/hu.json` forrásfájllal (a megvalósítás ezt használja).
+  `@angular/localize`-ra csak akkor térünk át, ha valaha többnyelvű
+  build kell.
 - Konvenció: a kódban magyar `id`-k, fordítás kulcsai pl.
   `documents.upload.title`. Angol fallback nem cél MVP-ben.
 - Dátum/szám/valuta lokalizáció: `Intl.DateTimeFormat('hu-HU')`,

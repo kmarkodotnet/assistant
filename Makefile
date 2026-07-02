@@ -1,5 +1,5 @@
 .PHONY: up down build test test-all test-integration lint migrate-up init-tls backup restore test-privacy ci zap-scan \
-	rpi-buildx-setup rpi-build rpi-save rpi-push rpi-up rpi-down
+	rpi-buildx-setup rpi-build rpi-save rpi-push rpi-up rpi-up-all rpi-down strong-pc-up strong-pc-down
 
 up:
 	docker compose up -d
@@ -73,23 +73,31 @@ zap-scan:
 	  -t http://localhost:8080 \
 	  -r zap-report.html || true
 
-# ---- Raspberry Pi (arm64) cross-build — lásd docs/deploy-raspberry-pi.md ----
+# ---- Raspberry Pi cross-build — lásd docs/deploy-raspberry-pi.md ----
+# RPI_PLATFORM/RPI_TAG együtt változtatandó a Pi architektúrája szerint:
+#   64-bit Pi (Pi 3/4/5, Zero 2 W 64-bit OS-sel): linux/arm64  + arm64-latest (alapértelmezett)
+#   32-bit Pi (bármelyik Pi 32-bit OS-sel):       linux/arm/v7 + armv7-latest
+RPI_PLATFORM ?= linux/arm64
 RPI_TAG ?= arm64-latest
 RPI_REGISTRY ?=
 
-# Egyszeri lépés: buildx builder QEMU-emulációval az arm64 cross-buildhez
+# Egyszeri lépés: buildx builder QEMU-emulációval a cross-buildhez
 rpi-buildx-setup:
 	docker buildx create --name family-os-rpi --driver docker-container --use 2>/dev/null || docker buildx use family-os-rpi
 	docker buildx inspect --bootstrap
 
-# arm64 image-ek buildelése és betöltése a helyi Docker image store-ba
-# (csak megtekintésre/exportra jó, natívan nem futtatható amd64 gépen)
+# api/workers/web image-ek buildelése a célplatformra és betöltése a helyi
+# Docker image store-ba (csak megtekintésre/exportra jó, natívan nem
+# futtatható más architektúrájú gépen). A `web` image mindig ide épül,
+# a Postgres/Ollama service-eket ez NEM érinti (azok a docker-compose.yml-ből
+# jönnek, image-ként, nem itt buildelve — lásd docker-compose.strong-pc.yml
+# 32-bit topológia esetén).
 rpi-build:
-	docker buildx build --platform linux/arm64 -f docker/api.Dockerfile -t family-os-api:$(RPI_TAG) --load .
-	docker buildx build --platform linux/arm64 -f docker/workers.Dockerfile -t family-os-workers:$(RPI_TAG) --load .
-	docker buildx build --platform linux/arm64 -f docker/web.Dockerfile -t family-os-web:$(RPI_TAG) --load .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/api.Dockerfile -t family-os-api:$(RPI_TAG) --load .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/workers.Dockerfile -t family-os-workers:$(RPI_TAG) --load .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/web.Dockerfile -t family-os-web:$(RPI_TAG) --load .
 
-# arm64 image-ek exportálása egy tömörített tar-ba, LAN-on belüli átvitelhez
+# image-ek exportálása egy tömörített tar-ba, LAN-on belüli átvitelhez
 # (scp-vel a Pi-re, majd `docker load -i` — nincs szükség registry-re)
 rpi-save: rpi-build
 	mkdir -p dist/rpi
@@ -102,13 +110,28 @@ rpi-save: rpi-build
 # RPI_REGISTRY beállítása kötelező, előtte `docker login` szükséges.
 rpi-push:
 	@test -n "$(RPI_REGISTRY)" || (echo "Hiba: add meg a RPI_REGISTRY változót, pl. make rpi-push RPI_REGISTRY=docker.io/felhasznalo/" && exit 1)
-	docker buildx build --platform linux/arm64 -f docker/api.Dockerfile -t $(RPI_REGISTRY)family-os-api:$(RPI_TAG) --push .
-	docker buildx build --platform linux/arm64 -f docker/workers.Dockerfile -t $(RPI_REGISTRY)family-os-workers:$(RPI_TAG) --push .
-	docker buildx build --platform linux/arm64 -f docker/web.Dockerfile -t $(RPI_REGISTRY)family-os-web:$(RPI_TAG) --push .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/api.Dockerfile -t $(RPI_REGISTRY)family-os-api:$(RPI_TAG) --push .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/workers.Dockerfile -t $(RPI_REGISTRY)family-os-workers:$(RPI_TAG) --push .
+	docker buildx build --platform $(RPI_PLATFORM) -f docker/web.Dockerfile -t $(RPI_REGISTRY)family-os-web:$(RPI_TAG) --push .
 
-# A Pi-n futtatandó parancsok (dokumentáció, nem helyi végrehajtásra szánt):
+# A Pi-n futtatandó parancsok (dokumentáció, nem helyi végrehajtásra szánt).
+# 32-bit / split topológiánál (postgres+ollama egy másik gépen fut) az
+# api/workers/web --no-deps-szel indul, hogy a compose NE próbálja meg a
+# (Pi-n nem létező) postgres/ollama service-t is helyben elindítani:
 rpi-up:
+	docker compose -f docker-compose.yml -f docker-compose.rpi.yml up -d --no-build --no-deps api workers web
+
+# 64-bit / minden-egy-gépen topológiánál (postgres+ollama IS a Pi-n fut):
+rpi-up-all:
 	docker compose -f docker-compose.yml -f docker-compose.rpi.yml up -d --no-build
 
 rpi-down:
 	docker compose -f docker-compose.yml -f docker-compose.rpi.yml down
+
+# A Pi-től külön, "erős" gépen futtatandó (postgres + ollama), split
+# topológia esetén — lásd docs/deploy-raspberry-pi.md 5. szakasz:
+strong-pc-up:
+	docker compose -f docker-compose.yml -f docker-compose.strong-pc.yml up -d --no-deps postgres ollama
+
+strong-pc-down:
+	docker compose -f docker-compose.yml -f docker-compose.strong-pc.yml down

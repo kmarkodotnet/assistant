@@ -55,8 +55,10 @@ flow-t.
 - **Fájlok:**
   - `src/FamilyOs.Domain/Services/DeadlineStateMachine.cs`
 - **AC:**
-  - [ ] `Upcoming → Due` automatikus a worker scan-ben (lásd reminder-engine).
-  - [ ] `Due → Passed` automatikus.
+  - [ ] `Upcoming → Due → Passed` átmenetek: **külön
+        `DeadlineStatusUpdater` recurring worker-job** (óránkénti scan a
+        Workers-ben — ez a job az Epic G dispatcher-e MELLETT fut, saját
+        felelősként; a state machine csak az átmenet-szabályokat adja).
   - [ ] `Upcoming/Due → Resolved | Dismissed` user akcióból.
 
 ### T-FBE-04 — Task CRUD endpointok
@@ -105,8 +107,11 @@ flow-t.
 - **Fájlok:**
   - `src/FamilyOs.Domain/Services/DefaultReminderPolicy.cs`
 - **AC:**
-  - [ ] `reminder-engine.md` §3.10 táblázat alapján.
-  - [ ] `Insurance → [30, 7, 1] napos offset-ek, InApp + Email csatorna`.
+  - [ ] Az ADR-0009 offsetjei alapján (Insurance 30/7/1, Inspection 30/7,
+        Invoice 14/3, Subscription 14/3, Medical 7/1, School 7/1,
+        egyéb 7/1).
+  - [ ] Csatorna mindig `InApp` (egy reminder = egy csatorna; Email az
+        eszkalációnál külön sorral — ADR-0009).
   - [ ] Konfigurálható `appsettings.json`-on (de defaults).
 
 ### T-FBE-09 — `SuggestionsAggregator` (F3)

@@ -19,8 +19,9 @@ szemantikusan keres és természetes nyelvű kérdésekre válaszol — mindig
 a saját, lokálisan tárolt adatokra hivatkozva.
 
 A megközelítés **privacy-first**: az alapértelmezett modell egy
-lokális futtatású LLM (gpt-oss 20b Ollamán), külső AI szolgáltató csak
-opcionálisan, explicit konfigurációval kerül a képbe. Az érzékeny családi
+lokális futtatású LLM (Ollama; default `llama3.2:3b`, erős hardveren
+`gpt-oss:20b` — ADR-0006), külső AI szolgáltató az MVP-ben egyáltalán
+nem hívható (kódba égetett LocalOnly kapu). Az érzékeny családi
 adatok soha nem hagyják el a háztartást a felhasználó tudta nélkül.
 
 A termék MVP-ben **egyetlen család** kiszolgálására készül (single-tenant,
@@ -69,7 +70,7 @@ A célzott problémák, amelyeket a Family OS megold:
 |---|---|
 | **admin** | Teljes hozzáférés, családtagok kezelése, beállítások, AI-provider váltás, törlés, audit log megtekintése. |
 | **adult** | Dokumentumok, jegyzetek, feladatok, határidők CRUD; AI keresés és Q&A; nem láthat „private” jelölt rekordot, ha nem ő a tulajdonos. |
-| **child / read-only** | Csak olvasás a számára explicit megosztott rekordokon (pl. saját iskolai dokumentumok, családi naptár közös eseményei). |
+| **child / read-only** | Csak olvasás a hozzá *kötött* (related_family_member = ő), nem-privát rekordokon — a rekord child-hoz kötése az explicit megosztási gesztus. Normatív mátrix: security-privacy.md 4.1, [ADR-0007](decisions/ADR-0007-child-szerepkor-rbac.md). |
 
 ### Másodlagos (későbbi fázis, nem MVP)
 - További rokonok (nagyszülők), akik bizonyos dokumentumokhoz olvasó
@@ -181,7 +182,9 @@ A „kész és működik” objektíven mérhető:
 - **Q&A pontosság:** 10 kontrollált kérdésből legalább 8-ra a rendszer
   helyes választ ad, hivatkozással a forrás-rekordra.
 - **Határidő-megbízhatóság:** Egyetlen aktiválva tartott emlékeztető sem
-  marad ki a megadott időpontban (legyen az dashboard-on vagy emailen).
+  vész el: az esedékes emlékeztető legkésőbb a rendszer következő
+  indulásakor tüzel (catch-up), és a 14 napnál régebben lecsúszottak is
+  láthatóan megjelennek a „lecsúszott" összesítőben.
 - **Adatszuverenitás:** Az MVP-ben működik a teljes lánc úgy, hogy
   **egyetlen byte sem** megy ki külső AI szolgáltatóhoz (lokális Ollama
   + lokális storage + lokális DB).
@@ -206,6 +209,14 @@ A „kész és működik” objektíven mérhető:
 - A felhasználók ismerik a Google login folyamatát. Az **admin technikailag
   jártas user** (Docker Compose indítás, alap konfiguráció, image frissítés
   vállalható).
+- **Internet-függés a loginnál (vállalt korlát):** a Google-bejelentkezés
+  kifelé irányuló internetkapcsolatot igényel — ha otthon az internet
+  megszakad (a LAN él), új bejelentkezés nem lehetséges; a 30 napos
+  sliding session a már bejelentkezett eszközökön mérsékli. Vészhelyzeti
+  helyi auth-fallback nem MVP.
+- **AI-modell alapértelmezés:** `llama3.2:3b` (fut 4–8 GB RAM-on);
+  erős hardveren `gpt-oss:20b` konfigurálható a jobb magyar minőségért
+  ([ADR-0006](decisions/ADR-0006-ai-modell-llama32.md)).
 - **Magyar nyelv mindenhol:** a UI, a kérdés-válasz és a feldolgozott
   **dokumentumok is magyar nyelvűek**. Többnyelvű dokumentum-feldolgozás
   nem cél — alkalmi nem-magyar dokumentum lehetséges, de optimalizálás
@@ -219,3 +230,9 @@ A „kész és működik” objektíven mérhető:
 | OCR motor | **Tesseract** (lokális, ingyenes), magyar nyelvi csomaggal. | [ADR-0002](decisions/ADR-0002-ocr-tesseract.md) |
 | Mobil ↔ lokális AI kapcsolat | **Csak LAN.** A mobil eszközök csak otthon, helyi hálózaton érik el az AI-szervert. Távoli/VPN elérés nem cél. | [ADR-0003](decisions/ADR-0003-mobil-csak-lan.md) |
 | Email integráció | **Gmail API** (OAuth 2.0), nem IMAP. | [ADR-0004](decisions/ADR-0004-email-gmail-api.md) |
+| Login flow | Kliens-oldali Google id_token POST; nincs login-redirect. | [ADR-0005](decisions/ADR-0005-auth-flow-id-token.md) |
+| AI-modell | Default `llama3.2:3b`; `gpt-oss:20b` opció erős hardveren. | [ADR-0006](decisions/ADR-0006-ai-modell-llama32.md) |
+| Child RBAC | Csak olvasás; láthatóság = hozzá kötött, nem-privát rekordok. | [ADR-0007](decisions/ADR-0007-child-szerepkor-rbac.md) |
+| Workers realtime | MVP-ben nincs cross-process push; polling/refresh. | [ADR-0008](decisions/ADR-0008-workers-realtime-jelzes.md) |
+| Reminder-generálás | Deadline-jóváhagyáskor; egy reminder = egy csatorna. | [ADR-0009](decisions/ADR-0009-reminder-generalas-es-csatorna.md) |
+| Deployment | Docker Compose a szállítási cél; Helm nem MVP (factory-kapu kivétel). | [ADR-0010](decisions/ADR-0010-compose-first-helm-kivetel.md) |

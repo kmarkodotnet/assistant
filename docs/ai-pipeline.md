@@ -90,12 +90,23 @@ Vezérlőelvek:
            └───────────┴──────────────┴───────────────┴─────────────┘
                                        ▼
                           ┌──────────────────────────────────────┐
-                          │ 9. processing_status = Done          │
-                          │    Domain event: DocumentProcessed   │
-                          │    → SignalR push az UI-nak          │
+                          │ 9. Finalizálás (PipelineOrchestrator)│
+                          │    mind az 5 job lezárult →          │
+                          │    Done (ha nem MIND Failed);        │
+                          │    mind Failed → Failed              │
                           │    → user jóváhagy / elvet            │
                           └──────────────────────────────────────┘
 ```
+
+**Finalizálási szabály (normatív, a `PipelineOrchestrator` szerint):**
+minden job-befejezés után az orchestrator ellenőrzi az 5 párhuzamos job
+(Classify, Summarize, ExtractDeadlines, ExtractTasks, Embed) legutóbbi
+futásait. Ha mind lezárult: `Done`, kivéve ha **mindegyik** `Failed` —
+akkor `Failed`. Részleges hiba (pl. 4 sikeres + 1 Failed) tehát `Done`-t
+ad; a hibás lépés az admin `/admin/jobs` felületén látható és
+retry-olható. A feldolgozási progress push a Workers-ből MVP-ben nem
+valós idejű ([ADR-0008](decisions/ADR-0008-workers-realtime-jelzes.md)) —
+a UI polling/refresh útján frissül.
 
 **Sorrend megjegyzések:**
 - A 4–8. lépések közül a 4. (osztályozás) befejezésére várhat a 6. és 7.
@@ -121,6 +132,9 @@ Vezérlőelvek:
     vagy `ImportedFile`/`ImportedEmail`).
   - Egyetlen `AiProcessingJob` (type = `ExtractText`) létrehozása ugyanabban
     a tranzakcióban.
+  - **Note-oknál szűkített pipeline:** manuális jegyzet csak `Embed` jobot
+    kap (nincs Classify/Summarize/Extract* — a jegyzet nem igényel
+    összefoglalót, a user maga címkézi).
 - **Sikermérce:** 201 + Document DTO < 500 ms (50 MB-os fájlra is, mert
   ez I/O dominált, nem AI).
 
@@ -173,12 +187,15 @@ Vezérlőelvek:
 - **Kimenet (várt JSON):**
   ```json
   {
-    "topics": ["jarmu/kotelezo", "penzugy/biztositas"],
-    "tags":   ["AXA", "2026"],
+    "topics": ["kotelezo", "biztositas"],
+    "tags":   ["axa", "2026"],
     "facet":  "Financial",     // "Warranty" | "Medical" | "Financial" | null
     "confidence": 0.84
   }
   ```
+  A `topics` elemek **slug-ok** (a `topic.slug` mező, globálisan egyedi,
+  `/` nélkül) — a prompt-taxonómia a lapos slug-listát adja át, a
+  hierarchia csak megjelenítési kérdés. A tag-nevek lowercase-normalizáltak.
 - **Adatbázis-művelet:**
   - Topic-slug feloldás → ha létezik, `DocumentTopic` insert
     (`origin = AiSuggested`); ha nem létezik, **nem hozunk létre** új Topic-ot
@@ -196,7 +213,8 @@ Vezérlőelvek:
 - **Bemenet:** `DocumentText.Content` (max 16 000 char-ig; ha hosszabb,
   map-reduce: chunkonként mini-összefoglaló → meta-összefoglaló).
 - **Prompt template:** 4.2.
-- **Kimenet:** plain szöveg.
+- **Kimenet:** JSON `{ "summary": string }` (a 6.3 parse-validáció miatt
+  minden LLM-kimenet JSON).
 - **Tárolás:** `DocumentSummary` insert (`is_current = true`); a korábbi
   `is_current` átállít `false`-ra ugyanabban a tranzakcióban (partial UNIQUE
   index miatt sorrend kötelező).
@@ -267,7 +285,12 @@ Vezérlőelvek:
 
 ### 3.8 Entitás-kinyerés a facet-hez (sub-step a 3.6/3.7 mellett)
 
-A 3.4 osztályozó által visszaadott `facet` érték alapján egy extra lépés fut:
+**Láncolás:** a 3.4 Classify lépés a `facet != null` eredmény esetén
+enqueue-ol egy `JobType = ExtractFacet` jobot (idempotensen: ha már van
+Queued/Running facet-job a dokumentumra, nem duplikál). A facet-lépés a
+9. lépés (`Done`) *után* is befejeződhet — a facet-adat késleltetve
+jelenik meg a UI-n, ez vállalt viselkedés. A 3.4 osztályozó által
+visszaadott `facet` érték alapján az alábbi extra lépés fut:
 
 - **Ha `facet = Warranty`:** `JobType = ExtractEntities` egy Warranty-specifikus
   prompttal, kimeneti JSON-ja: `product_name`, `brand`, `model`,
@@ -304,25 +327,27 @@ a prompt template a facet típusa alapján kerül kiválasztásra.
   Ha 5 attempt után sem sikerül: `Document.processing_status = Failed`,
   de a Summary/Deadline/Task lépések eredménye **megmarad** (külön job).
 
-### 3.10 Default Reminder javaslat
+### 3.10 Default Reminder-ek a jóváhagyáskor
 
-A 3.6 lépés minden elfogadott Deadline-hoz default Reminder javaslatot
-generál a `DeadlineCategory` szerinti policy alapján:
+**A pipeline a Deadline-javaslathoz NEM hoz létre Reminder-t**
+([ADR-0009](decisions/ADR-0009-reminder-generalas-es-csatorna.md)).
+A default reminderek a felhasználói jóváhagyáskor
+(`POST /deadlines/{id}/approve`) generálódnak a `DefaultReminderPolicy`
+szerint, csak jövőbeli trigger-időpontokra:
 
 | Category | Default reminder offset-ek | Csatorna |
 |---|---|---|
-| Insurance | 30 nap, 7 nap, 1 nap előtt | InApp + Email |
-| Invoice | 7 nap, 1 nap előtt | InApp |
-| Inspection | 30 nap, 7 nap előtt | InApp + Email |
-| School | 7 nap, 1 nap előtt | InApp |
-| Medical | 14 nap, 2 nap előtt | InApp |
-| Subscription | 14 nap, 3 nap előtt | InApp |
-| Personal | 1 nap előtt | InApp |
-| Other | 7 nap előtt | InApp |
+| Insurance | 30, 7, 1 nap előtt | InApp |
+| Inspection | 30, 7 nap előtt | InApp |
+| Invoice | 14, 3 nap előtt | InApp |
+| Subscription | 14, 3 nap előtt | InApp |
+| Medical | 7, 1 nap előtt | InApp |
+| School | 7, 1 nap előtt | InApp |
+| Personal / Other | 7, 1 nap előtt | InApp |
 
-Ezek `Reminder` rekordok `origin = AiSuggested`, `status = Scheduled`,
-de **csak akkor tüzelnek**, ha a kapcsolódó Deadline-t a felhasználó
-jóváhagyta (`approved_utc IS NOT NULL`). Részletek a `reminder-engine.md`-ben.
+Email-értesítés az eszkalációnál (új, `Email` csatornás Reminder-sor)
+vagy explicit felhasználói reminderrel jön létre. Részletek:
+`reminder-engine.md` 2.4.
 
 ---
 
@@ -592,9 +617,12 @@ nélkül), de a *következő* lépés Ollama provider-rel megy.
 
 ### 7.2 Ollama nem elérhető
 
-- Az AI lépések `Failed`-be esnek `error_message = 'AI provider unavailable'`-lal.
-- Recurring health-check (`/healthz/ready`-ben): 5 percenként próbálkozik
-  reset-elni a `next_attempt_utc`-t a friss attempt-re.
+- Az AI lépések `Failed`-be esnek `error_message = 'AI provider unavailable'`-lal,
+  `next_attempt_utc` backoff-fal — a scheduler a `Failed` sorokat is
+  felveszi, amikor az idő lejárt (database-schema.md 4.16), így az Ollama
+  visszatértekor a queue magától feldolgozódik.
+- A `/healthz/ready` az Ollama-t csak *degraded* jelzésként mutatja, nem
+  buktatja a readiness-t (a nem-AI funkciók Ollama nélkül is működnek).
 - Nincs cloud-fallback `LocalOnly` esetén.
 
 ### 7.3 Hibrid mobil → lokális PC (jövőbeli, nem MVP)
@@ -611,6 +639,11 @@ nem kell.
 ---
 
 ## 8. Provider képességmátrix
+
+> Modell-alapértelmezés: **`llama3.2:3b`** (ADR-0006); erős hardveren
+> (16+ GB RAM) `gpt-oss:20b` ajánlott konfigurációval. A mátrix a
+> 20b-re vonatkozik; a 3b-nél a magyar kimenet minősége gyengébb,
+> a latency alacsonyabb.
 
 | Képesség | Ollama (`gpt-oss:20b`) | Anthropic Claude | OpenAI |
 |---|---|---|---|

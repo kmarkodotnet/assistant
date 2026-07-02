@@ -3,6 +3,15 @@
 Otthoni, autonóm szoftvergyár Claude Code-ra építve.
 Stack: C#/.NET · Angular · PostgreSQL · Docker · Kubernetes · Playwright.
 
+> **Aktuális állapot (2026-07):** a factory-infrastruktúra egy része
+> (`.claude/agents`, `.claude/commands`, `.claude/skills`,
+> `docs/requirements/`, `factory-metrics/`) még **nem létezik** — az
+> alábbi parancsok célállapotot írnak le. A `scripts/` viszont él.
+> Az első termék, a **Family OS** (családi információkezelő) ebben a
+> repóban készül: tervek a `docs/`-ban (review-k: `*.review.md`,
+> döntések: `docs/decisions/ADR-*`), kód a `src/` + `frontend/` alatt,
+> telepítés: `docs/DELIVERY.md`.
+
 ## Használat (3 lépés)
 1. Másold a specifikációdat: `docs/requirements/<termek>.md`
    (sablon: `docs/templates/requirements-template.md`)

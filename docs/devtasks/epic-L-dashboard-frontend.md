@@ -74,8 +74,7 @@ pillantásra. 4-6 widget, mind kompakt és cselekvésre orientált.
 - **AC:**
   - [ ] Lecsúszott reminder lista (top 5).
   - [ ] Per-item akciók: „Újraütemezem" / „Elvetem".
-  - [ ] Üres állapot: „Nincs lecsúszott emlékeztető. 🎉" (emoji csak ha
-        a user explicit kéri).
+  - [ ] Üres állapot: „Nincs lecsúszott emlékeztető."
   - [ ] „Mindet megnézem" link `/reminders?status=Skipped`-re.
 
 ### T-LFE-08 — `SavedSearchesWidget`

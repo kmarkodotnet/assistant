@@ -237,6 +237,8 @@ A `code-reviewer` agent (opus) **kötelező** minden privacy-érzékeny PR-hoz
   - [ ] Output: `DeadlineSuggestion[]`.
   - [ ] Csak jövőbeli (>= today) dátumok.
   - [ ] Dedup: `(source_document_id, title, due_date)` triple-re skip.
+  - [ ] **Reminder NEM születik a javaslatnál** (ADR-0009) — a default
+        reminderek a Deadline jóváhagyásakor generálódnak (T-FBE-07).
 
 ### T-DBE-17 — `ITaskExtractor` + `OllamaTaskExtractor`
 - **Cél:** D8 feladat-kivonás.
@@ -327,9 +329,13 @@ A `code-reviewer` agent (opus) **kötelező** minden privacy-érzékeny PR-hoz
   - [ ] DetectLanguage befejezte → 5 párhuzamos job enqueue
         (Classify, Summarize, ExtractDeadlines, ExtractTasks, Embed),
         + `processing_status = Analyzing`.
-  - [ ] Mind az 5 lefutott → `processing_status = Done`.
-  - [ ] Ha bármely lépés `Failed`, a többi folytatódik; csak ha mind
-        `Failed`, a Document `Failed`.
+  - [ ] Classify eredménye `facet != null` → `ExtractFacet` job enqueue
+        (idempotensen: Queued/Running facet-jobra nem duplikál).
+  - [ ] Mind az 5 alap-job lezárult → `Done`, KIVÉVE ha mindegyik
+        `Failed` → `Failed`. Részleges hiba (pl. 4 siker + 1 Failed) =
+        `Done`; a hibás lépés a `/admin/jobs` felületen látható és
+        retry-olható. Az `ExtractFacet` a Done után is befejeződhet
+        (vállalt késleltetés).
 
 ### T-DBE-25 — Suggestion idempotencia (Tag/Topic/Deadline/Task)
 - **Cél:** újrafutás nem hoz létre duplikátumot.
@@ -347,11 +353,13 @@ A `code-reviewer` agent (opus) **kötelező** minden privacy-érzékeny PR-hoz
   - `src/FamilyOs.Application/Documents/Events/DocumentProcessingProgressNotification.cs`
   - `src/FamilyOs.Application/Documents/Events/DocumentProcessedNotification.cs`
 - **AC:**
-  - [ ] `documentProcessingProgress` event `{ documentId, stage, percent }`.
+  - [ ] `documentProcessingProgress` event `{ documentId, stage, percent }`
+        — csak Api-oldali eseményekre.
   - [ ] `documentProcessed` és `documentFailed` event-ek.
-  - [ ] A workers a Pipeline minden lépésnél SignalR client-en küld (de
-        nem az Api-n keresztül — a Workers szerver-szerveren `IHubContext`-szel
-        publikál).
+  - [ ] **MVP-korlát (ADR-0008):** a Workers NEM push-ol (no-op notifier);
+        a worker-oldali progress a kliens polling/refresh útján jut el a
+        UI-ra. Cross-process push (belső HTTP-hívás Workers → Api)
+        post-MVP.
 
 ### T-DBE-27 — Privacy guard tesztek
 - **Cél:** `security-privacy.md` §13.3 privacy assertions.

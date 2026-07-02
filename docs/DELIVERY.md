@@ -4,9 +4,10 @@
 **Célközönség:** Otthoni rendszergazda (te magad)  
 **Környezet:** LAN-only, self-hosted, egyetlen otthoni PC
 
-> Raspberry Pi-n futtatnád? Lásd [deploy-raspberry-pi.md](deploy-raspberry-pi.md)
-> (arm64 kompatibilitás, cross-build workflow, Ollama méretezés gyenge
-> hardverre) — ez a dokumentum a kiegészítője, nem helyettesíti.
+> Raspberry Pi-n futtatnád (32- vagy 64-bit)? Lásd
+> [deploy-raspberry-pi.md](deploy-raspberry-pi.md) (arch-kompatibilitás,
+> osztott topológia külön Ollama-géppel, cross-build workflow) — ez a
+> dokumentum a kiegészítője, nem helyettesíti.
 
 ---
 
@@ -199,10 +200,12 @@ docker compose logs api --tail 50
 4. Bal menü → "Credentials" → "Create Credentials" → "OAuth 2.0 Client ID"
    - Application type: **Web application**
    - Name: Family OS Web
-   - Authorized JavaScript origins: `https://family-os.lan`
-   - Authorized redirect URIs:
-     - `https://family-os.lan/api/v1/auth/google/callback`
-     - `https://localhost/api/v1/auth/google/callback` (fejlesztéshez)
+   - Authorized JavaScript origins: `https://family-os.lan` és
+     `https://localhost` (fejlesztéshez) — **a bejelentkezéshez csak ez
+     kell** (kliens-oldali id_token flow, ADR-0005)
+   - Authorized redirect URIs: csak a **Gmail-integrációhoz** (K1)
+     szükséges, a loginhoz nem:
+     - `https://family-os.lan/api/v1/sources/gmail/callback`
 5. "Create" → másold ki a **Client ID** és **Client Secret** értékeket
 
 ### 3b. Env változók kitöltése
@@ -501,21 +504,19 @@ docker compose logs api | grep -E "(AUDIT|WARN|ERROR)" | tail -100
 Adatbázisból közvetlenül:
 ```bash
 docker compose exec postgres psql -U family_migrator -d family_os \
-  -c "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 50;"
+  -c "SELECT * FROM app.audit_log ORDER BY occurred_utc DESC LIMIT 50;"
 ```
 
-### 8c. OAuth tokenek visszavonása
+### 8c. Hozzáférések visszavonása
 
-1. Google Account → Biztonság → Harmadik féltől származó alkalmazások → Family OS → Hozzáférés visszavonása
-2. Az adatbázisban érvényteleníts minden tokent:
-```bash
-docker compose exec postgres psql -U family_migrator -d family_os \
-  -c "UPDATE refresh_tokens SET revoked_at = NOW() WHERE revoked_at IS NULL;"
-```
-3. Indítsd újra az API-t:
-```bash
-docker compose restart api
-```
+1. Google Account → Biztonság → Harmadik féltől származó alkalmazások →
+   Family OS → Hozzáférés visszavonása (ez érvényteleníti a Gmail-
+   integráció refresh tokenjét is; a tokenek a `app.source.config_json`-ban,
+   titkosítva tárolódnak — nincs külön token-tábla).
+2. Minden aktív bejelentkezés érvénytelenítése: Data Protection kulcs-
+   rotáció (8d) — a session cookie-k ettől azonnal érvénytelenek.
+3. Gmail-forrás leválasztása az UI-ból: Beállítások → Integrációk →
+   „Leválasztás" (ez a Google-oldali revoke-ot is meghívja).
 
 ### 8d. Data Protection kulcs rotáció
 
@@ -737,7 +738,8 @@ docker compose logs ollama | tail -30
 # Teszteld kézzel:
 curl http://localhost:11434/api/tags
 
-# Ha a modell nem töltődött le:
+# Ha a modell nem töltődött le (default: llama3.2:3b — ADR-0006;
+# erős hardveren opcionálisan gpt-oss:20b, Ai-konfig átállítással):
 docker compose exec ollama ollama pull llama3.2:3b
 docker compose exec ollama ollama pull nomic-embed-text
 ```
