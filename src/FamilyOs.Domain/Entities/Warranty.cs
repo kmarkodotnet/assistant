@@ -26,7 +26,7 @@ public sealed class Warranty
     public static Warranty Create(Guid documentId, string productName)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             ProductName = productName,
             CreatedUtc = DateTime.UtcNow,

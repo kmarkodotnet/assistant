@@ -45,7 +45,7 @@ public sealed class Document
         bool isPrivate = false)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             OriginalFileName = originalFileName,
             MimeType = mimeType,

@@ -16,7 +16,7 @@ public sealed class DocumentSummary
     public static DocumentSummary Create(Guid documentId, string content, string modelName, string promptVersion)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             Content = content,
             ModelName = modelName,

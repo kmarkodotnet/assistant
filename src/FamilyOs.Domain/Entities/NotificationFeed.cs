@@ -23,7 +23,7 @@ public sealed class NotificationFeed
         string? idempotencyKey = null)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             TargetUserAccountId = userId,
             Type = type,
             Title = title,

@@ -35,7 +35,7 @@ public sealed class Deadline
         DeadlineCategory category = DeadlineCategory.Other)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             Description = description,
             DueDateUtc = dueDateUtc,
@@ -59,7 +59,7 @@ public sealed class Deadline
         bool isPrivate = false)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             Description = description,
             DueDateUtc = dueDateUtc,

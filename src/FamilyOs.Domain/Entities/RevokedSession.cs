@@ -11,7 +11,7 @@ public sealed class RevokedSession
     public static RevokedSession Create(string sessionId, DateTime revokedUtc)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             SessionId = sessionId,
             RevokedUtc = revokedUtc,
         };

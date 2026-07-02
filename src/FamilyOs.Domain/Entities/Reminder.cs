@@ -39,7 +39,7 @@ public sealed class Reminder
         if (taskId == Guid.Empty) throw new ArgumentException("TaskId required.");
         return new Reminder
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             TaskId = taskId,
             DeadlineId = null,
             TargetUserAccountId = targetUserAccountId,
@@ -65,7 +65,7 @@ public sealed class Reminder
         if (deadlineId == Guid.Empty) throw new ArgumentException("DeadlineId required.");
         return new Reminder
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             TaskId = null,
             DeadlineId = deadlineId,
             TargetUserAccountId = targetUserAccountId,

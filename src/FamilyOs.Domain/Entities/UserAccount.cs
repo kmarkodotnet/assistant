@@ -40,7 +40,7 @@ public sealed class UserAccount
 
         return new UserAccount
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             FamilyMemberId = familyMemberId,
             GoogleSubject = googleSubject,
             Email = email.ToLowerInvariant().Trim(),

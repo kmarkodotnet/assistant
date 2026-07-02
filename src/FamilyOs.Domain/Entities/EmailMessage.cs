@@ -33,7 +33,7 @@ public sealed class EmailMessage
         bool hasAttachments)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             SourceId = sourceId,
             GmailMessageId = gmailMessageId,
             FromAddress = fromAddress,

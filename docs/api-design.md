@@ -205,7 +205,8 @@ GIS flow; login-redirect-URI nincs).
 
 ### 4.3 `GET /healthz/live` és `/healthz/ready`
 - Standard ASP.NET Core health endpointok (nem `/api/v1/` alatt).
-- `live`: process up. `ready`: DB + Ollama elérhető.
+- `live`: process up. `ready`: DB elérhető (az Ollama csak *degraded*
+  jelzés a válaszban, nem buktatja a readiness-t).
 
 ---
 
@@ -636,14 +637,14 @@ Response (mode függő):
 A `frontend-structure.md` 6 szakaszában már részletes — itt a hub-ok és
 események összegezve:
 
-### 22.1 `/realtime/notifications`
+### 22.1 `/hubs/notifications`
 - Server → client események:
   - `notificationCreated(NotificationDto)`
   - `reminderFired(ReminderDto)` (sticky toast)
   - `aiSuggestionReady(SuggestionSummaryDto)` (új batch-jóváhagyásra
     vár valami).
 
-### 22.2 `/realtime/documents`
+### 22.2 `/hubs/documents`
 - Server → client események:
   - `documentProcessingProgress({ documentId, stage, percent })`
   - `documentProcessed(DocumentDto)`

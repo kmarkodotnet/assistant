@@ -13,7 +13,7 @@ public sealed class SavedSearch
     public static SavedSearch Create(string name, string queryJson, Guid userAccountId)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Name = name,
             QueryJson = queryJson,
             UserAccountId = userAccountId,

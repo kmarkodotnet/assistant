@@ -19,7 +19,7 @@ public sealed class Topic
     public static Topic Create(string name, string slug, Guid? parentId = null, string? icon = null, int sortOrder = 0)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Name = name,
             Slug = slug.ToLowerInvariant(),
             ParentId = parentId,

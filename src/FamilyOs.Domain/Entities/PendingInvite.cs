@@ -13,7 +13,7 @@ public sealed class PendingInvite
     public static PendingInvite Create(string email, Guid familyMemberId, string role, DateTime now)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Email = email.ToLowerInvariant().Trim(),
             FamilyMemberId = familyMemberId,
             Role = role,

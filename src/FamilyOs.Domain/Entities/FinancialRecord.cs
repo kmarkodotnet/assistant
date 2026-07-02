@@ -27,7 +27,7 @@ public sealed class FinancialRecord
     public static FinancialRecord Create(Guid documentId, FinancialRecordType recordType)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             RecordType = recordType,
             RecurrencePeriod = RecurrencePeriod.None,

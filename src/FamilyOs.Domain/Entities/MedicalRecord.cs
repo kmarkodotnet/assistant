@@ -30,7 +30,7 @@ public sealed class MedicalRecord
         string title)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             FamilyMemberId = familyMemberId,
             RecordType = recordType,

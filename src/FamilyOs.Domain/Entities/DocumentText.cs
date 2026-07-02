@@ -28,7 +28,7 @@ public sealed class DocumentText
         decimal? ocrConfidence = null)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             Content = content,
             ExtractionMethod = method,

@@ -35,7 +35,7 @@ public sealed class FamilyTask
         Guid? assignedToFamilyMemberId = null)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             Description = description,
             DueDateUtc = dueDateUtc,
@@ -60,7 +60,7 @@ public sealed class FamilyTask
         bool isPrivate = false)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             Description = description,
             DueDateUtc = dueDateUtc,

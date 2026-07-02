@@ -939,9 +939,9 @@ További családtagokat az admin vesz fel.
 
 - **Naming convention.** Snake_case az adatbázisban; `EFCore.NamingConventions`
   csomaggal automatikus konverzió a PascalCase C# nevekből.
-- **UUID v7 generálás.** Saját `IUuidGenerator` interfész + `UuidV7Generator`
-  implementáció. EF Core `ValueGenerator<Guid>` helyett a domain-réteg
-  állítja be az ID-t létrehozáskor.
+- **UUID v7 generálás.** A .NET 10 natív `Guid.CreateVersion7()`-tel a
+  domain-réteg factory-metódusai állítják be az ID-t létrehozáskor
+  (nincs külön generátor-absztrakció, EF Core `ValueGenerator<Guid>` sem).
 - **Enum mapping.** `modelBuilder.HasPostgresEnum<UserRole>("app", "user_role")`
   stb. — minden enum a `app` sémában.
 - **Soft delete query filter.** Minden olyan entitásra, amelynek van

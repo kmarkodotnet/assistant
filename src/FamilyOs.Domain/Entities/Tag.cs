@@ -15,7 +15,7 @@ public sealed class Tag
     public static Tag Create(string name, string? color = null)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Name = name.ToLowerInvariant().Trim(),
             Color = color,
             UsageCount = 1,

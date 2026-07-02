@@ -67,5 +67,5 @@ public sealed class FamilyMember
 
     public void SoftDelete() => DeletedUtc = DateTime.UtcNow;
 
-    private static Guid NewId() => Guid.NewGuid(); // UUID v7 later via IUuidGenerator
+    private static Guid NewId() => Guid.CreateVersion7(); // UUID v7 (.NET 10 natív)
 }

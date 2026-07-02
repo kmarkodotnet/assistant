@@ -26,7 +26,7 @@ public sealed class AuditLog
         string? detailsJson = null)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             OccurredUtc = DateTime.UtcNow,
             Action = action,
             UserAccountId = userAccountId,

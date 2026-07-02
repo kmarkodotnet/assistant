@@ -138,8 +138,10 @@ A `Infrastructure` projekt **nem** ismeri az AI providereket — azok az
 - Endpoint-csoportok modulokba szervezve (`Endpoints/DocumentsModule.cs`,
   `Endpoints/SearchModule.cs`, …).
 - Cross-cutting middleware: exception handler (ProblemDetails),
-  auth, CORS (LAN allowlist), rate-limit (családi szinten enyhe),
-  request-context (current user).
+  trace-id, idempotency, auth, request-context (current user).
+  CORS nem szükséges (a web nginx-proxyn át same-origin szolgálja ki az
+  `/api`-t); rate-limit a Fázis 12 hardening része (a kódban még nincs —
+  T-EBE-14).
 - **Tilos** business logika és AI hívás közvetlenül — csak MediatR
   `Send`-eket adnak.
 
@@ -592,8 +594,8 @@ kódbázis-szintű refaktor.
 - **Verzió:** `/api/v1/system/version` — git sha + build date.
 - **Adminisztrációs felület:** `/admin/jobs` (csak admin) — `AiProcessingJob`
   retry / cancel; Hangfire dashboard `/hangfire`.
-- **SignalR hosting:** a hubokat (`/realtime/notifications`,
-  `/realtime/documents`) kizárólag az `Api` process hosztolja; a `Workers`
+- **SignalR hosting:** a hubokat (`/hubs/notifications`,
+  `/hubs/documents`) kizárólag az `Api` process hosztolja; a `Workers`
   MVP-ben nem push-ol (no-op notifier, ADR-0008) — worker-oldali események
   a kliens polling/refresh útján jutnak el a UI-ra. Post-MVP irány: belső
   HTTP-hívás a Workers → Api irányban.

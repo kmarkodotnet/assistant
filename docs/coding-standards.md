@@ -229,9 +229,9 @@ public sealed class Reminder
     {
         if (triggerUtc.Kind != DateTimeKind.Utc)
             throw new DomainException("Reminder.TriggerUtc must be UTC.");
-        // Id: UUIDv7 (IUuidGenerator / UuidV7Generator — lásd
-        // database-schema.md 6.; Guid.NewGuid() [v4] TILOS entitás-ID-re)
-        return new Reminder { Id = UuidV7.NewV7(), TaskId = taskId, ... };
+        // Id: UUIDv7 (.NET 10 natív — lásd database-schema.md 6.;
+        // Guid.NewGuid() [v4] TILOS entitás-ID-re)
+        return new Reminder { Id = Guid.CreateVersion7(), TaskId = taskId, ... };
     }
 
     public static Reminder ForDeadline(Guid deadlineId, ...) { /* analóg */ }

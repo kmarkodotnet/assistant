@@ -28,7 +28,7 @@ public sealed class Note
         bool isPrivate = false)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Title = title,
             Body = body,
             CreatedByUserAccountId = createdByUserId,

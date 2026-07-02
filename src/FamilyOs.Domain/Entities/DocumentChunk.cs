@@ -18,7 +18,7 @@ public sealed class DocumentChunk
     public static DocumentChunk Create(Guid documentId, int chunkIndex, string content)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             DocumentId = documentId,
             ChunkIndex = chunkIndex,
             Content = content,

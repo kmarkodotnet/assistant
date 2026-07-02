@@ -20,7 +20,7 @@ public sealed class AiProcessingJob
 
     public static AiProcessingJob Create(AiJobType jobType, Guid targetId) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = Guid.CreateVersion7(),
         JobType = jobType,
         TargetType = JobTargetType.Document,
         TargetId = targetId,
@@ -34,7 +34,7 @@ public sealed class AiProcessingJob
 
     public static AiProcessingJob CreateForNote(AiJobType jobType, Guid noteId) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = Guid.CreateVersion7(),
         JobType = jobType,
         TargetType = JobTargetType.Note,
         TargetId = noteId,
@@ -84,7 +84,7 @@ public sealed class AiProcessingJob
 
     public static AiProcessingJob CreateForEmailMessage(AiJobType jobType, Guid emailMessageId) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = Guid.CreateVersion7(),
         JobType = jobType,
         TargetType = JobTargetType.EmailMessage,
         TargetId = emailMessageId,

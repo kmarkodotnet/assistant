@@ -19,7 +19,7 @@ public sealed class Source
     public static Source Create(string name, SourceKind kind, string configJson = "{}")
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Name = name,
             Kind = kind,
             ConfigJson = configJson,

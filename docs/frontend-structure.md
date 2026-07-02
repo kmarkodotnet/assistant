@@ -332,9 +332,9 @@ export class DocumentsApi {
 ### 6.1 Hub-ok
 
 A backend két hub-ot exponál:
-- `/realtime/notifications` — push events: `notificationCreated`,
+- `/hubs/notifications` — push events: `notificationCreated`,
   `reminderFired`, `aiSuggestionReady`.
-- `/realtime/documents` — `documentProcessingProgress`, `documentProcessed`,
+- `/hubs/documents` — `documentProcessingProgress`, `documentProcessed`,
   `documentFailed`.
 
 ### 6.2 Kliens integráció
@@ -344,7 +344,7 @@ A backend két hub-ot exponál:
 @Injectable({ providedIn: 'root' })
 export class RealtimeService {
   private conn = new HubConnectionBuilder()
-      .withUrl('/realtime/notifications')
+      .withUrl('/hubs/notifications')
       .withAutomaticReconnect()
       .build();
 

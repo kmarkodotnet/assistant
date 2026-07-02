@@ -19,7 +19,7 @@ public sealed class NoteChunk
     public static NoteChunk Create(Guid noteId, int chunkIndex, string content)
         => new()
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             NoteId = noteId,
             ChunkIndex = chunkIndex,
             Content = content,
