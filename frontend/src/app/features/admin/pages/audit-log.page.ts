@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, signal, inject } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { switchMap, catchError, of, tap } from 'rxjs';
@@ -17,7 +17,7 @@ const ACTIONS = [
 @Component({
   selector: 'app-audit-log-page',
   standalone: true,
-  imports: [DatePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent],
+  imports: [DatePipe, SlicePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="max-w-7xl mx-auto">
@@ -188,14 +188,12 @@ export class AuditLogPage {
   readonly result = toSignal(this.result$, { initialValue: null as PagedResult<AuditLogDto> | null });
 
   applyFilter(): void {
-    this.filter.set({
-      from: this.filterFrom || undefined,
-      to: this.filterTo || undefined,
-      action: this.filterAction || undefined,
-      entityType: this.filterEntityType || undefined,
-      page: 1,
-      pageSize: 20,
-    });
+    const next: AuditFilter = { page: 1, pageSize: 20 };
+    if (this.filterFrom) next.from = this.filterFrom;
+    if (this.filterTo) next.to = this.filterTo;
+    if (this.filterAction) next.action = this.filterAction;
+    if (this.filterEntityType) next.entityType = this.filterEntityType;
+    this.filter.set(next);
   }
 
   resetFilter(): void {

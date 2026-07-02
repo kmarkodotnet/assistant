@@ -84,9 +84,9 @@ export class AiProvidersSettingsPage {
   readonly saving = signal(false);
   readonly editableProviders = signal<EditableProvider[]>([]);
 
-  readonly rawProviders = toSignal(
+  readonly rawProviders = toSignal<AiProviderDto[] | null>(
     this.api.list().pipe(catchError(() => of([] as AiProviderDto[]))),
-    { initialValue: null as AiProviderDto[] | null }
+    { initialValue: null }
   );
 
   constructor() {
@@ -128,9 +128,10 @@ export class AiProvidersSettingsPage {
   async save(provider: EditableProvider): Promise<void> {
     this.saving.set(true);
     try {
+      const patch: { enabled?: boolean; model?: string } = { enabled: provider.enabled };
+      if (provider.model) patch.model = provider.model;
       await new Promise<void>((resolve, reject) =>
-        this.api.patch(provider.name, { enabled: provider.enabled, model: provider.model || undefined })
-          .subscribe({ complete: resolve, error: reject })
+        this.api.patch(provider.name, patch).subscribe({ complete: resolve, error: reject })
       );
       this.notify.success(`${provider.name} beállításai mentve.`);
     } catch {

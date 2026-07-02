@@ -62,8 +62,8 @@ import { SkeletonComponent } from '../../../shared/ui/skeleton.component';
 export class SecurityEventsPage {
   private readonly api = inject(AuditApiService);
 
-  readonly events = toSignal(
+  readonly events = toSignal<AuditLogDto[] | null>(
     this.api.securityEvents().pipe(catchError(() => of([] as AuditLogDto[]))),
-    { initialValue: null as AuditLogDto[] | null }
+    { initialValue: null }
   );
 }

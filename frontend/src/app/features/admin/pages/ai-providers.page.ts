@@ -84,9 +84,9 @@ export class AiProvidersPage {
   readonly saving = signal(false);
   readonly editableProviders = signal<EditableProvider[]>([]);
 
-  private readonly rawProviders = toSignal(
+  readonly rawProviders = toSignal<AiProviderDto[] | null>(
     this.api.list().pipe(catchError(() => of([] as AiProviderDto[]))),
-    { initialValue: null as AiProviderDto[] | null }
+    { initialValue: null }
   );
 
   constructor() {
@@ -104,7 +104,7 @@ export class AiProvidersPage {
     const checked = (event.target as HTMLInputElement).checked;
     this.editableProviders.update(list => {
       const next = [...list];
-      next[idx] = { ...next[idx], enabled: checked };
+      next[idx] = { ...next[idx], enabled: checked } as EditableProvider;
       return next;
     });
   }
@@ -113,7 +113,7 @@ export class AiProvidersPage {
     const value = (event.target as HTMLInputElement).value;
     this.editableProviders.update(list => {
       const next = [...list];
-      next[idx] = { ...next[idx], model: value };
+      next[idx] = { ...next[idx], model: value } as EditableProvider;
       return next;
     });
   }
@@ -128,9 +128,10 @@ export class AiProvidersPage {
   async save(provider: EditableProvider): Promise<void> {
     this.saving.set(true);
     try {
+      const patch: { enabled?: boolean; model?: string } = { enabled: provider.enabled };
+      if (provider.model) patch.model = provider.model;
       await new Promise<void>((resolve, reject) =>
-        this.api.patch(provider.name, { enabled: provider.enabled, model: provider.model || undefined })
-          .subscribe({ complete: resolve, error: reject })
+        this.api.patch(provider.name, patch).subscribe({ complete: resolve, error: reject })
       );
       this.notify.success(`${provider.name} beállításai mentve.`);
     } catch {

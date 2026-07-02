@@ -89,9 +89,9 @@ export class IntegrationsPage {
   readonly actionLoading = signal(false);
   readonly sourcesSignal = signal<SourceDto[] | null>(null);
 
-  private readonly rawSources = toSignal(
+  private readonly rawSources = toSignal<SourceDto[] | null>(
     this.api.list().pipe(catchError(() => of([] as SourceDto[]))),
-    { initialValue: null as SourceDto[] | null }
+    { initialValue: null }
   );
 
   sources() {

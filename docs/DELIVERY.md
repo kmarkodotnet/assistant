@@ -4,6 +4,10 @@
 **Célközönség:** Otthoni rendszergazda (te magad)  
 **Környezet:** LAN-only, self-hosted, egyetlen otthoni PC
 
+> Raspberry Pi-n futtatnád? Lásd [deploy-raspberry-pi.md](deploy-raspberry-pi.md)
+> (arm64 kompatibilitás, cross-build workflow, Ollama méretezés gyenge
+> hardverre) — ez a dokumentum a kiegészítője, nem helyettesíti.
+
 ---
 
 ## Tartalomjegyzék

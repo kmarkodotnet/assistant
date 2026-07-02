@@ -1,0 +1,37 @@
+# Raspberry Pi (arm64) felülbírálás.
+#
+# A docker/*.Dockerfile-ok natívan is buildelhetők a Pi-n (minden bázis-image
+# publikál linux/arm64 variánst), de a `dotnet publish` + `pnpm build` erős
+# gépet igényel — Pi 4/5-ön 15-30 percig is elhúzódhat buildenként. Ez a fájl
+# arra szolgál, hogy előre, egy erősebb gépen (buildx + QEMU) elkészített
+# image-eket használjunk a build: szakaszok helyett.
+#
+# Használat a Pi-n (lásd docs/deploy-raspberry-pi.md):
+#   docker compose -f docker-compose.yml -f docker-compose.rpi.yml up -d --no-build
+#
+# A --no-build kötelező: enélkül Compose megpróbálná lokálisan (is) buildelni
+# a build: szakaszt, ha az image még nem létezik pontosan a megadott tag alatt.
+#
+# Image-forrás kiválasztása .env-ben:
+#   RPI_IMAGE_PREFIX=                       → helyi `docker load`-dal betöltött image (lásd `make rpi-save`)
+#   RPI_IMAGE_PREFIX=docker.io/felhasznalo/ → registry-ből húzott image (lásd `make rpi-push`)
+#   RPI_TAG=arm64-latest                    → az image tag (alapértelmezett: arm64-latest)
+
+services:
+  api:
+    image: ${RPI_IMAGE_PREFIX:-}family-os-api:${RPI_TAG:-arm64-latest}
+    mem_limit: ${RPI_API_MEM_LIMIT:-512m}
+
+  workers:
+    image: ${RPI_IMAGE_PREFIX:-}family-os-workers:${RPI_TAG:-arm64-latest}
+    mem_limit: ${RPI_WORKERS_MEM_LIMIT:-768m}
+
+  web:
+    image: ${RPI_IMAGE_PREFIX:-}family-os-web:${RPI_TAG:-arm64-latest}
+    mem_limit: ${RPI_WEB_MEM_LIMIT:-128m}
+
+  postgres:
+    mem_limit: ${RPI_POSTGRES_MEM_LIMIT:-512m}
+
+  ollama:
+    mem_limit: ${RPI_OLLAMA_MEM_LIMIT:-3g}

@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, signal, inject } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { combineLatest, interval, startWith, switchMap, catchError, of, tap } from 'rxjs';
@@ -24,7 +24,7 @@ const STATUS_BADGE: Record<string, BadgeVariant> = {
 @Component({
   selector: 'app-ai-jobs-page',
   standalone: true,
-  imports: [DatePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent, BadgeComponent, QueueStatsComponent],
+  imports: [DatePipe, SlicePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent, BadgeComponent, QueueStatsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="max-w-6xl mx-auto">
