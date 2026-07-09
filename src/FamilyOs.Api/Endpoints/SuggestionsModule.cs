@@ -28,12 +28,29 @@ public static class SuggestionsModule
             CancellationToken ct) =>
         {
             if (userAccessor.UserAccountId is null) return Results.Unauthorized();
-            var items = req.Items.Select(i => new BatchApproveItem(i.EntityType, i.Id, i.Action)).ToList();
+
+            var items = new List<BatchApproveItem>();
+
+            foreach (var id in req.Approve?.Tasks ?? [])
+                items.Add(new BatchApproveItem("task", Guid.Parse(id), "approve"));
+            foreach (var id in req.Approve?.Deadlines ?? [])
+                items.Add(new BatchApproveItem("deadline", Guid.Parse(id), "approve"));
+
+            foreach (var id in req.Reject?.Tasks ?? [])
+                items.Add(new BatchApproveItem("task", Guid.Parse(id), "reject"));
+            foreach (var id in req.Reject?.Deadlines ?? [])
+                items.Add(new BatchApproveItem("deadline", Guid.Parse(id), "reject"));
+
             var result = await sender.Send(new BatchApproveCommand(items, userAccessor.UserAccountId.Value), ct);
             return Results.Ok(result);
         }).RequireAuthorization("RequireAdult");
     }
 }
 
-public record BatchApproveItemRequest(string EntityType, Guid Id, string Action);
-public record BatchApproveRequest(IReadOnlyList<BatchApproveItemRequest> Items);
+public record BatchApproveCategories(
+    IReadOnlyList<string>? Tasks,
+    IReadOnlyList<string>? Deadlines);
+
+public record BatchApproveRequest(
+    BatchApproveCategories? Approve,
+    BatchApproveCategories? Reject);
