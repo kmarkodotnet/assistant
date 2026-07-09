@@ -27,10 +27,12 @@ services:
       dockerfile: docker/api.Dockerfile
     environment:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_app;Password=${APP_DB_PASSWORD:-changeme}"
+      ConnectionStrings__MigrationConnection: "Host=postgres;Port=5432;Database=family_os;Username=family_migrator;Password=${POSTGRES_PASSWORD:-changeme}"
       ASPNETCORE_ENVIRONMENT: Production
       FAMILYOS_DATA_DIR: /data
       Auth__BootstrapAdmin: ${BOOTSTRAP_ADMIN_EMAIL:-}
       Auth__AllowedEmails: ${ALLOWED_EMAILS:-}
+      Auth__GoogleClientId: ${GOOGLE_CLIENT_ID:-}
       Ai__PrivacyMode: "LocalOnly"
       Ollama__BaseUrl: "http://ollama:11434"
     volumes:

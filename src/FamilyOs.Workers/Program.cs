@@ -16,9 +16,11 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddFamilyOsAiServices(ctx.Configuration);
 
         // Hangfire with PostgreSQL storage
-        var connStr = ctx.Configuration.GetConnectionString("Default")
-            ?? ctx.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
+        var connStr =
+            ctx.Configuration.GetConnectionString("DefaultConnection") is { Length: > 0 } cs
+                ? cs
+                : ctx.Configuration.GetConnectionString("Default")
+                    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
         services.AddFamilyOsHangfire(connStr);
         services.AddHangfireServer(opts => opts.WorkerCount = 4);

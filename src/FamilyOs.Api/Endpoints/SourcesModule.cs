@@ -21,7 +21,7 @@ public static class SourcesModule
         {
             var placeholder = new
             {
-                redirectUrl = "https://accounts.google.com/o/oauth2/auth?client_id=MVP_PLACEHOLDER&scope=https://www.googleapis.com/auth/gmail.readonly&response_type=code&access_type=offline",
+                redirectUrl = "https://accounts.google.com/o/oauth2/auth?client_id=986243578734-ui3esopnvs4p7tddi0g8q0nl1e6bke5r.apps.googleusercontent.com&scope=https://www.googleapis.com/auth/gmail.readonly&response_type=code&access_type=offline",
                 note = "OAuth2 flow not yet implemented — configure credentials in appsettings.json and restart."
             };
             return Results.Ok(placeholder);

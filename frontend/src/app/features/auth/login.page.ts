@@ -1,5 +1,7 @@
 import { Component, ChangeDetectionStrategy, OnInit, inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { NotificationService } from '../../core/notifications/notification.service';
@@ -32,22 +34,41 @@ declare const google: {
 export class LoginPage implements OnInit {
   private auth = inject(AuthService);
   private notify = inject(NotificationService);
+  private http = inject(HttpClient);
   private platformId = inject(PLATFORM_ID);
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
+    this.loadConfig();
+  }
 
+  private async loadConfig(): Promise<void> {
+    try {
+      const config = await firstValueFrom(
+        this.http.get<{ googleClientId: string }>('/api/v1/auth/config')
+      );
+      if (!config.googleClientId) {
+        this.notify.error('Google Client ID nincs beállítva. Ellenőrizd a GOOGLE_CLIENT_ID env változót.');
+        return;
+      }
+      this.loadGoogleScript(config.googleClientId);
+    } catch {
+      this.notify.error('Nem sikerült betölteni a bejelentkezési konfigurációt.');
+    }
+  }
+
+  private loadGoogleScript(clientId: string): void {
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
-    script.onload = () => this.initGoogleSignIn();
+    script.onload = () => this.initGoogleSignIn(clientId);
     document.head.appendChild(script);
   }
 
-  private initGoogleSignIn(): void {
+  private initGoogleSignIn(clientId: string): void {
     google.accounts.id.initialize({
-      client_id: (window as unknown as { GOOGLE_CLIENT_ID?: string }).GOOGLE_CLIENT_ID ?? '',
+      client_id: clientId,
       callback: async (response) => {
         try {
           await this.auth.loginWithGoogleToken(response.credential);

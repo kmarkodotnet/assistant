@@ -18,6 +18,7 @@ using FamilyOs.Infrastructure.Markdown;
 using FamilyOs.Infrastructure.Notifications;
 using FamilyOs.Infrastructure.Persistence;
 using FamilyOs.Infrastructure.Persistence.Repositories;
+using FamilyOs.Infrastructure.Persistence.Seed;
 using FamilyOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -39,9 +40,10 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserAccessor, CurrentUserService>();
 
-        var connectionString = configuration.GetConnectionString("Default")
-            ?? configuration.GetConnectionString("DefaultConnection")
-            ?? string.Empty;
+        var connectionString =
+            configuration.GetConnectionString("DefaultConnection") is { Length: > 0 } cs
+                ? cs
+                : configuration.GetConnectionString("Default") ?? string.Empty;
 
         // DB enums are stored as PascalCase (e.g. 'Self', 'Admin'). The default Npgsql
         // translator would send snake_case ('self', 'admin'), causing 22P02 errors.
@@ -72,13 +74,14 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention());
 
         services.AddScoped<IFamilyOsDbContext>(sp => sp.GetRequiredService<FamilyOsDbContext>());
+        services.AddScoped<DbSeedRunner>();
 
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {
                 options.Cookie.Name = "__Host-family-os-session";
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;

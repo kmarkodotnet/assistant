@@ -4,6 +4,8 @@
 .claude
 .config
 
+tests/
+
 **/bin/
 **/obj/
 

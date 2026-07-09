@@ -17,8 +17,8 @@ public sealed class GetDashboardQueryHandler : IRequestHandler<GetDashboardQuery
         var now = DateTime.UtcNow;
         var in7Days = now.AddDays(7);
 
-        // Run 4 queries in parallel
-        var upcomingTask = _db.Deadlines
+        // EF Core DbContext is not thread-safe — queries must run sequentially
+        var upcoming = await _db.Deadlines
             .AsNoTracking()
             .Where(d => d.DueDateUtc >= now && d.DueDateUtc <= in7Days
                 && d.Status == DeadlineStatus.Upcoming
@@ -38,7 +38,7 @@ public sealed class GetDashboardQueryHandler : IRequestHandler<GetDashboardQuery
             })
             .ToListAsync(cancellationToken);
 
-        var overdueTask = _db.Deadlines
+        var overdue = await _db.Deadlines
             .AsNoTracking()
             .Where(d => d.DueDateUtc < now
                 && (d.Status == DeadlineStatus.Due || d.Status == DeadlineStatus.Passed)
@@ -58,7 +58,7 @@ public sealed class GetDashboardQueryHandler : IRequestHandler<GetDashboardQuery
             })
             .ToListAsync(cancellationToken);
 
-        var recentDocsTask = _db.Documents
+        var recentDocs = await _db.Documents
             .AsNoTracking()
             .Where(d => d.DeletedUtc == null
                 && (!d.IsPrivate || d.CreatedByUserAccountId == request.UserId))
@@ -74,7 +74,7 @@ public sealed class GetDashboardQueryHandler : IRequestHandler<GetDashboardQuery
             })
             .ToListAsync(cancellationToken);
 
-        var savedSearchesTask = _db.SavedSearches
+        var savedSearches = await _db.SavedSearches
             .AsNoTracking()
             .Where(s => s.UserAccountId == request.UserId)
             .OrderByDescending(s => s.CreatedUtc)
@@ -88,17 +88,15 @@ public sealed class GetDashboardQueryHandler : IRequestHandler<GetDashboardQuery
             })
             .ToListAsync(cancellationToken);
 
-        var suggestionsCountTask = CountSuggestionsAsync(request.UserId, cancellationToken);
-
-        await Task.WhenAll(upcomingTask, overdueTask, recentDocsTask, savedSearchesTask, suggestionsCountTask);
+        var suggestions = await CountSuggestionsAsync(request.UserId, cancellationToken);
 
         return new DashboardDto
         {
-            UpcomingDeadlines = upcomingTask.Result,
-            OverdueReminders = overdueTask.Result,
-            RecentDocuments = recentDocsTask.Result,
-            SavedSearches = savedSearchesTask.Result,
-            PendingSuggestions = suggestionsCountTask.Result,
+            UpcomingDeadlines = upcoming,
+            OverdueReminders = overdue,
+            RecentDocuments = recentDocs,
+            SavedSearches = savedSearches,
+            PendingSuggestions = suggestions,
         };
     }
 

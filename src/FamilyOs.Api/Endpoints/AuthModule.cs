@@ -14,6 +14,11 @@ public static class AuthModule
     {
         var group = app.MapGroup("/api/v1/auth");
 
+        // Public endpoint — returns the Google Client ID for the frontend login page
+        group.MapGet("/config", (IConfiguration config) =>
+            Results.Ok(new { googleClientId = config["Auth:GoogleClientId"] ?? string.Empty }))
+            .AllowAnonymous();
+
         group.MapPost("/login/google", async (LoginGoogleRequest req, ISender sender, HttpContext ctx) =>
         {
             var dto = await sender.Send(new LoginGoogleCommand(req.IdToken));

@@ -8,6 +8,8 @@ using FamilyOs.Application.Abstractions.Notifications;
 using FamilyOs.Infrastructure;
 using FamilyOs.Infrastructure.Ai.DependencyInjection;
 using FamilyOs.Infrastructure.Health;
+using FamilyOs.Infrastructure.Persistence.Seed;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
@@ -36,9 +38,10 @@ builder.Services.AddHttpClient("ollama", client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
-var connStr = builder.Configuration.GetConnectionString("Default")
-              ?? builder.Configuration.GetConnectionString("DefaultConnection")
-              ?? string.Empty;
+var connStr =
+    builder.Configuration.GetConnectionString("DefaultConnection") is { Length: > 0 } cs
+        ? cs
+        : builder.Configuration.GetConnectionString("Default") ?? string.Empty;
 
 var hcBuilder = builder.Services.AddHealthChecks()
     .AddCheck<OllamaHealthCheck>("ollama", HealthStatus.Degraded, tags: ["ready"]);
@@ -62,6 +65,18 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Run migrations and sync DB role passwords before accepting traffic
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    await scope.ServiceProvider.GetRequiredService<DbSeedRunner>().RunAsync();
+}
+
+// Trust X-Forwarded-Proto from nginx so the app knows it's behind HTTPS
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
+});
 
 // Middleware pipeline (order critical)
 app.UseMiddleware<ExceptionToProblemDetailsMiddleware>();
