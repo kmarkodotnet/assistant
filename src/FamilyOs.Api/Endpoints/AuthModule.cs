@@ -1,9 +1,14 @@
+using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Auth.Commands;
+using FamilyOs.Application.Auth.Dtos;
 using FamilyOs.Application.Auth.Queries;
 using FamilyOs.Application.Users.Commands;
+using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace FamilyOs.Api.Endpoints;
@@ -63,8 +68,97 @@ public static class AuthModule
             await sender.Send(new UpdatePreferencesCommand(req.EmailEnabled, req.QuietHoursStart, req.QuietHoursEnd));
             return Results.NoContent();
         }).RequireAuthorization("RequireAuthenticated");
+
+        // DEV-ONLY: test-login endpoint for E2E tests — returns 404 in Production
+        group.MapPost("/test-login", async (
+            TestLoginRequest req,
+            IWebHostEnvironment env,
+            IFamilyOsDbContext db,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            if (env.IsProduction())
+                return Results.NotFound();
+
+            if (string.IsNullOrWhiteSpace(req.Email))
+                return Results.BadRequest("Email is required.");
+
+            var email = req.Email.ToLowerInvariant().Trim();
+
+            // Parse role, default to Child
+            var role = Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out var parsedRole)
+                ? parsedRole
+                : UserRole.Child;
+
+            var displayName = string.IsNullOrWhiteSpace(req.DisplayName)
+                ? email
+                : req.DisplayName.Trim();
+
+            // Find or create the user account
+            var existingAccount = await db.UserAccounts
+                .Include(u => u.FamilyMember)
+                .FirstOrDefaultAsync(u => u.Email == email, ct);
+
+            UserAccount account;
+            if (existingAccount is not null)
+            {
+                existingAccount.RecordLogin();
+                await db.SaveChangesAsync(ct);
+                account = existingAccount;
+            }
+            else
+            {
+                var familyMember = FamilyMember.Create(
+                    displayName: displayName,
+                    relation: Relation.Self);
+                db.FamilyMembers.Add(familyMember);
+
+                // Use email as a synthetic GoogleSubject for test accounts
+                account = UserAccount.Create(
+                    familyMemberId: familyMember.Id,
+                    googleSubject: $"test|{email}",
+                    email: email,
+                    displayName: displayName,
+                    role: role);
+
+                account.RecordLogin();
+                db.UserAccounts.Add(account);
+                await db.SaveChangesAsync(ct);
+            }
+
+            var jti = Guid.NewGuid().ToString();
+            var claims = new List<Claim>
+            {
+                new("sub", account.Id.ToString()),
+                new("family_member_id", account.FamilyMemberId.ToString()),
+                new(ClaimTypes.Role, account.Role.ToString()),
+                new("jti", jti),
+                new(ClaimTypes.Email, account.Email),
+                new(ClaimTypes.Name, account.DisplayName),
+            };
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+
+            await ctx.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                principal,
+                new AuthenticationProperties { IsPersistent = true });
+
+            return Results.Ok(new CurrentUserDto(
+                UserAccountId: account.Id,
+                FamilyMemberId: account.FamilyMemberId,
+                DisplayName: account.DisplayName,
+                Email: account.Email,
+                Role: account.Role.ToString(),
+                Preferences: new UserPreferencesDto(
+                    EmailEnabled: account.EmailEnabled,
+                    QuietHoursStart: account.QuietHoursStart,
+                    QuietHoursEnd: account.QuietHoursEnd)));
+        }).AllowAnonymous();
     }
 }
 
 public record LoginGoogleRequest(string IdToken);
 public record UpdatePreferencesRequest(bool EmailEnabled, string? QuietHoursStart, string? QuietHoursEnd);
+public record TestLoginRequest(string Email, string Role, string DisplayName);

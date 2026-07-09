@@ -1,0 +1,3 @@
+Ez egy teszt dokumentum az E2E teszteléshez.
+A dokumentum tartalmaz szöveget, amelyet az AI feldolgoz.
+Dátum: 2026-01-15. Összeg: 12 345 Ft.
