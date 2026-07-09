@@ -9,6 +9,7 @@ using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
 using MediatR;
 using System.Security.Cryptography;
+using FamilyOs.Application.Common.Ai;
 
 namespace FamilyOs.Application.Documents.UploadDocument;
 
@@ -64,6 +65,7 @@ public sealed class UploadDocumentCommandHandler(
         );
 
         db.Documents.Add(doc);
+        db.AiProcessingJobs.Add(AiProcessingJob.Create(AiJobType.ExtractText, doc.Id));
         await db.SaveChangesAsync(cancellationToken);
 
         await auditLogger.LogAsync(
