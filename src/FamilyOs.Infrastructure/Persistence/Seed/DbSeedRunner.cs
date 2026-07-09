@@ -73,8 +73,9 @@ public sealed class DbSeedRunner
         LogGrantingPermissions(_logger, null);
         await using var grantCmd = conn.CreateCommand();
         grantCmd.CommandText = """
+            CREATE SCHEMA IF NOT EXISTS hangfire;
             GRANT USAGE ON SCHEMA app TO family_app;
-            GRANT USAGE ON SCHEMA hangfire TO family_app;
+            GRANT USAGE, CREATE ON SCHEMA hangfire TO family_app;
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO family_app;
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA hangfire TO family_app;
             GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA app TO family_app;

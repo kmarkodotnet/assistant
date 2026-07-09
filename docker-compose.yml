@@ -72,6 +72,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      api:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     logging:
       driver: "json-file"
       options:
@@ -104,7 +108,7 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -115,6 +119,22 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
+
+  ollama-init:
+    image: ollama/ollama
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama pull nomic-embed-text:v1.5
+        ollama pull llama3.2:3b
+    volumes:
+      - ollama_models:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
   backup:
     image: alpine:3.19

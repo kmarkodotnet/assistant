@@ -93,11 +93,12 @@ public sealed partial class GmailIngestionService(
         }
 
         // 3. Load already-known Gmail message IDs to avoid N+1 duplicate checks
-        var knownIds = await db.EmailMessages
+        var knownIdsList = await db.EmailMessages
             .AsNoTracking()
             .Where(m => m.SourceId == sourceId)
             .Select(m => m.GmailMessageId)
-            .ToHashSetAsync(ct);
+            .ToListAsync(ct);
+        var knownIds = knownIdsList.ToHashSet(StringComparer.Ordinal);
 
         // 4. Fetch message list (last 50 unread or since last sync)
         var messageIds = await FetchMessageIdsAsync(http, accessToken, source.LastSyncUtc, sourceId, ct);
