@@ -27,6 +27,7 @@ export interface DocumentDetailDto extends DocumentDto {
     isManuallyEdited: boolean;
     extractionMethod: ExtractionMethod;
   } | null;
+  aiSummary: string | null;
 }
 
 export interface DocumentTextDto {

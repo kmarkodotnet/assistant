@@ -7,27 +7,29 @@ public static class EmbeddingChunker
 
     public static IReadOnlyList<string> Chunk(string text)
     {
-        // Split by paragraph breaks (\n\n) first
-        // Then merge small paragraphs / split large ones to stay near MaxChunkChars
-        // Add overlap from previous chunk's tail
         var chunks = new List<string>();
         var paragraphs = text.Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
         var current = new System.Text.StringBuilder();
 
         foreach (var para in paragraphs)
         {
-            if (current.Length + para.Length > MaxChunkChars && current.Length > 0)
+            // If a single paragraph exceeds the limit, split it by sentence/word boundary
+            var subParas = para.Length > MaxChunkChars ? SplitLarge(para) : [para];
+
+            foreach (var sub in subParas)
             {
-                var chunkText = current.ToString().Trim();
-                if (!string.IsNullOrWhiteSpace(chunkText)) chunks.Add(chunkText);
-                // overlap: take last OverlapChars of previous chunk
-                var overlap = chunkText.Length > OverlapChars ? chunkText[^OverlapChars..] : chunkText;
-                current.Clear();
-                current.Append(overlap);
+                if (current.Length + sub.Length > MaxChunkChars && current.Length > 0)
+                {
+                    var chunkText = current.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(chunkText)) chunks.Add(chunkText);
+                    var overlap = chunkText.Length > OverlapChars ? chunkText[^OverlapChars..] : chunkText;
+                    current.Clear();
+                    current.Append(overlap);
+                    current.Append("\n\n");
+                }
+                current.Append(sub);
                 current.Append("\n\n");
             }
-            current.Append(para);
-            current.Append("\n\n");
         }
 
         if (current.Length > 0)
@@ -36,6 +38,23 @@ public static class EmbeddingChunker
             if (!string.IsNullOrWhiteSpace(last)) chunks.Add(last);
         }
 
-        return chunks.Count > 0 ? chunks : [text.Trim()];
+        return chunks.Count > 0 ? chunks : [text[..Math.Min(text.Length, MaxChunkChars)].Trim()];
+    }
+
+    private static IEnumerable<string> SplitLarge(string text)
+    {
+        var start = 0;
+        while (start < text.Length)
+        {
+            var end = Math.Min(start + MaxChunkChars, text.Length);
+            // Try to break at a space to avoid mid-word splits
+            if (end < text.Length)
+            {
+                var spaceIdx = text.LastIndexOf(' ', end, Math.Min(end - start, 200));
+                if (spaceIdx > start) end = spaceIdx;
+            }
+            yield return text[start..end].Trim();
+            start = end;
+        }
     }
 }

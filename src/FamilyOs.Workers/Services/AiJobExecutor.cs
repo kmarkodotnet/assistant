@@ -66,7 +66,7 @@ public sealed class AiJobExecutor
         await _jobRepository.SaveChangesAsync(ct);
 
         // After each job completes (done or failed), check if all parallel jobs are done
-        var parallelTypes = new[]
+        var parallelTypes = new List<AiJobType>
         {
             AiJobType.Summarize, AiJobType.Classify, AiJobType.ExtractDeadlines,
             AiJobType.ExtractTasks, AiJobType.Embed,

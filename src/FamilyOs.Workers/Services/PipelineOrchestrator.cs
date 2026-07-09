@@ -12,7 +12,9 @@ public sealed class PipelineOrchestrator
     private readonly IProcessingProgressNotifier _notifier;
     private readonly ILogger<PipelineOrchestrator> _logger;
 
-    private static readonly AiJobType[] ParallelJobTypes =
+    // List (not array) so EF Core can translate .Contains() without hitting the
+    // ReadOnlySpan<T> overload introduced in .NET 10 that EF cannot parameterize.
+    private static readonly List<AiJobType> ParallelJobTypes =
     [
         AiJobType.Summarize,
         AiJobType.Classify,
@@ -52,7 +54,7 @@ public sealed class PipelineOrchestrator
             .Where(j => j != null)
             .ToList();
 
-        if (latestPerType.Count < ParallelJobTypes.Length)
+        if (latestPerType.Count < ParallelJobTypes.Count)
         {
             LogDocumentNotReady(_logger, documentId, null);
             return; // not all enqueued yet

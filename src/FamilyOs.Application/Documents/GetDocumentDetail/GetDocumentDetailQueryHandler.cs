@@ -30,6 +30,12 @@ public sealed class GetDocumentDetailQueryHandler(
                 doc.DocumentText.IsManuallyEdited,
                 doc.DocumentText.ExtractionMethod);
 
+        var aiSummary = await db.DocumentSummaries
+            .AsNoTracking()
+            .Where(s => s.DocumentId == query.DocumentId && s.IsCurrent)
+            .Select(s => s.Content)
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new DocumentDetailDto(
             doc.Id,
             doc.Title,
@@ -42,6 +48,7 @@ public sealed class GetDocumentDetailQueryHandler(
             doc.RelatedFamilyMemberId,
             doc.CreatedUtc,
             doc.UpdatedUtc,
-            textSummary);
+            textSummary,
+            aiSummary);
     }
 }

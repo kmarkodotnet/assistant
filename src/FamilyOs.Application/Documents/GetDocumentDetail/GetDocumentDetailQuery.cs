@@ -17,7 +17,8 @@ public record DocumentDetailDto(
     Guid? RelatedFamilyMemberId,
     DateTime CreatedUtc,
     DateTime UpdatedUtc,
-    DocumentTextSummaryDto? TextSummary
+    DocumentTextSummaryDto? TextSummary,
+    string? AiSummary
 );
 
 public record DocumentTextSummaryDto(

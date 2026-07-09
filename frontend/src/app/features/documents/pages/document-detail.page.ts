@@ -102,13 +102,15 @@ const SOURCE_LABEL: Record<string, string> = {
                 </div>
               }
 
-              <!-- AI summary placeholder -->
+              <!-- AI summary -->
               <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
                 <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2">AI összefoglaló</p>
-                @if (doc.processingStatus === 'Done') {
-                  <p class="text-sm text-[var(--color-text-muted)]">Az AI összefoglaló generálása a háttérben zajlik — hamarosan megjelenik itt.</p>
+                @if (doc.aiSummary) {
+                  <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ doc.aiSummary }}</p>
                 } @else if (doc.processingStatus === 'Failed') {
                   <p class="text-sm text-danger-600">A feldolgozás meghiúsult. Próbáld meg újraindítani az újrafeldolgozást.</p>
+                } @else if (doc.processingStatus === 'Done' || doc.processingStatus === 'Analyzing') {
+                  <p class="text-sm text-[var(--color-text-muted)]">Az összefoglaló generálása folyamatban van...</p>
                 } @else {
                   <p class="text-sm text-[var(--color-text-muted)]">Az összefoglaló a feldolgozás befejezése után lesz elérhető.</p>
                 }
