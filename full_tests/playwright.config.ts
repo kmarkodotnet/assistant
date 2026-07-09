@@ -30,10 +30,19 @@ export default defineConfig({
   /* AI pipeline can take up to 90 s */
   timeout: 60_000,
 
-  reporter: [['html', { outputFolder: '../test-results/full-tests-report' }]],
+  reporter: process.env['CI']
+    ? [['html', { outputFolder: '../test-results/full-tests-report' }]]
+    : [
+        ['list'],
+        ['html', { open: 'never', outputFolder: '../test-results/full-tests-report' }],
+      ],
 
   use: {
-    baseURL: 'http://localhost',
+    baseURL: 'https://localhost',
+    ignoreHTTPSErrors: true,
+    launchOptions: {
+      slowMo: process.env['PWSLOWMO'] ? parseInt(process.env['PWSLOWMO']) : 0,
+    },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     /* Default project uses admin storage state */

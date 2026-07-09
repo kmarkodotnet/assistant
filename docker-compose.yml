@@ -33,6 +33,7 @@ services:
       Auth__BootstrapAdmin: ${BOOTSTRAP_ADMIN_EMAIL:-}
       Auth__AllowedEmails: ${ALLOWED_EMAILS:-}
       Auth__GoogleClientId: ${GOOGLE_CLIENT_ID:-}
+      Auth__AllowTestLogin: ${ALLOW_TEST_LOGIN:-false}
       Gmail__ClientId: ${GMAIL_CLIENT_ID:-}
       Gmail__ClientSecret: ${GMAIL_CLIENT_SECRET:-}
       Gmail__RedirectUri: ${GMAIL_REDIRECT_URI:-}

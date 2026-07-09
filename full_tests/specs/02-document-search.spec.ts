@@ -1,50 +1,128 @@
 /**
- * UC02 — Dokumentum keresése (FTS + szemantikus)
+ * UC02 — Dokumentum keresése UI-on keresztül (chat-alapú keresési oldal)
  *
- * Assumes at least one Done-status document exists in the DB
- * (spec 01 runs first). If the DB is empty the tests still pass
- * because hits.length >= 0 is always valid.
+ * A /search oldal chat-szerű felületen fogadja a keresési lekérdezéseket.
+ * Az oldal betöltésekor üres állapotot mutat, majd a felhasználó begépeli
+ * a keresést és elküldi. A válasz az előzmények listájában jelenik meg.
  */
 import { test, expect } from '@playwright/test';
-import { apiPost } from '../helpers/api';
 
-test.describe('UC02 — Document search', () => {
-  test('UC02-1 FTS search returns 200 and valid structure', async ({ request }) => {
-    const response = await apiPost(request, '/search', {
-      query: 'teszt dokumentum',
-      mode: 'Text',
+test.describe('UC02 — Document search UI', () => {
+
+  test('UC02-1 keresési oldal betölt, üres állapot látható @smoke', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+      await expect(page.getByRole('heading', { name: 'Keresés' })).toBeVisible({ timeout: 15_000 });
     });
 
-    expect(response.status()).toBe(200);
-
-    const body = await response.json() as Record<string, unknown>;
-    // Accept either "hits" or "items" as the result array key
-    const results = (body['hits'] ?? body['items']) as unknown[];
-    expect(Array.isArray(results)).toBeTruthy();
-  });
-
-  test('UC02-2 Semantic search returns 200', async ({ request }) => {
-    const response = await apiPost(request, '/search', {
-      query: 'teszt',
-      mode: 'Semantic',
+    await test.step('Keresési input és küldés gomb megjelenik', async () => {
+      await expect(page.getByTestId('search-input')).toBeVisible();
+      await expect(page.getByTestId('search-submit')).toBeVisible();
     });
 
-    // 200 even if embedding is not available yet (empty results)
-    expect(response.status()).toBe(200);
+    await test.step('Üres állapot üzenet látható', async () => {
+      await expect(page.getByText('Kérdezz bármit a dokumentumaidról')).toBeVisible();
+    });
   });
 
-  test('UC02-3 UI search page loads without 500 error @smoke', async ({ page }) => {
-    await page.goto('/search');
+  test('UC02-2 mód-választó megjelenik és váltható', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+    });
 
-    // Should not show a server error
-    await expect(page).not.toHaveTitle(/500|error/i);
+    await test.step('Mód-választó alapértelmezetten Auto', async () => {
+      const modeSelect = page.getByTestId('search-mode-select');
+      await expect(modeSelect).toBeVisible();
+      await expect(modeSelect).toHaveValue('Auto');
+    });
 
-    // The page heading or search input should be visible
-    const searchInput = page.locator('input[type="search"], input[type="text"], [data-testid="search-input"]');
-    // It is acceptable if there's no input yet (page may load differently)
-    // — the key assertion is no 500
-    const h1 = page.locator('h1, h2, [data-testid="search-heading"]');
-    const inputOrHeading = searchInput.or(h1);
-    await expect(inputOrHeading.first()).toBeVisible({ timeout: 15_000 });
+    await test.step('Váltás Szöveges módra', async () => {
+      await page.getByTestId('search-mode-select').selectOption('Text');
+      await expect(page.getByTestId('search-mode-select')).toHaveValue('Text');
+    });
+
+    await test.step('Váltás Szemantikus módra', async () => {
+      await page.getByTestId('search-mode-select').selectOption('Semantic');
+      await expect(page.getByTestId('search-mode-select')).toHaveValue('Semantic');
+    });
+  });
+
+  test('UC02-3 FTS keresés elindítása és eredmény megjelenítése', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+    });
+
+    await test.step('Szöveges mód beállítása', async () => {
+      await page.getByTestId('search-mode-select').selectOption('Text');
+    });
+
+    await test.step('Keresési szöveg beírása és elküldése', async () => {
+      await page.getByTestId('search-input').fill('teszt dokumentum');
+      await page.getByTestId('search-submit').click();
+    });
+
+    await test.step('Felhasználói üzenet megjelenik az előzményekben', async () => {
+      await expect(page.getByText('teszt dokumentum')).toBeVisible({ timeout: 30_000 });
+    });
+
+    await test.step('Betöltési jelző eltűnik', async () => {
+      await expect(page.locator('.animate-bounce').first()).not.toBeVisible({ timeout: 30_000 });
+    });
+  });
+
+  test('UC02-4 szemantikus keresés elindítása', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+    });
+
+    await test.step('Szemantikus keresés elküldése', async () => {
+      await page.getByTestId('search-mode-select').selectOption('Semantic');
+      await page.getByTestId('search-input').fill('teszt');
+      await page.getByTestId('search-submit').click();
+    });
+
+    await test.step('Felhasználói üzenet megjelenik az előzményekben', async () => {
+      await expect(page.getByText('teszt').first()).toBeVisible({ timeout: 30_000 });
+    });
+
+    await test.step('Betöltési jelző eltűnik', async () => {
+      await expect(page.locator('.animate-bounce').first()).not.toBeVisible({ timeout: 30_000 });
+    });
+  });
+
+  test('UC02-5 előzmények törlése gomb működik', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+    });
+
+    await test.step('Keresés elküldése (előzmények megjelenítéséhez)', async () => {
+      await page.getByTestId('search-input').fill('keresés törlés teszt');
+      await page.getByTestId('search-submit').click();
+      await expect(page.getByTestId('search-clear-history')).toBeVisible({ timeout: 30_000 });
+    });
+
+    await test.step('Előzmények törlése', async () => {
+      await page.getByTestId('search-clear-history').click();
+    });
+
+    await test.step('Üres állapot visszaáll', async () => {
+      await expect(page.getByText('Kérdezz bármit a dokumentumaidról')).toBeVisible();
+    });
+  });
+
+  test('UC02-6 Enter billentyűvel is elküldhető a keresés', async ({ page }) => {
+    await test.step('Keresési oldal megnyitása', async () => {
+      await page.goto('/search');
+    });
+
+    await test.step('Keresés elküldése Enter-rel', async () => {
+      const input = page.getByTestId('search-input');
+      await input.fill('enter teszt keresés');
+      await input.press('Enter');
+    });
+
+    await test.step('Keresés szövege megjelenik az előzményekben', async () => {
+      await expect(page.getByText('enter teszt keresés')).toBeVisible({ timeout: 30_000 });
+    });
   });
 });

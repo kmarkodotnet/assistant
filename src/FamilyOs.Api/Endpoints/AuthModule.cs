@@ -69,15 +69,18 @@ public static class AuthModule
             return Results.NoContent();
         }).RequireAuthorization("RequireAuthenticated");
 
-        // DEV-ONLY: test-login endpoint for E2E tests — returns 404 in Production
+        // DEV-ONLY: test-login endpoint for E2E tests.
+        // Disabled unless ASPNETCORE_ENVIRONMENT != Production OR Auth:AllowTestLogin == "true".
         group.MapPost("/test-login", async (
             TestLoginRequest req,
             IWebHostEnvironment env,
+            IConfiguration configuration,
             IFamilyOsDbContext db,
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (env.IsProduction())
+            var allowed = !env.IsProduction() || configuration["Auth:AllowTestLogin"] == "true";
+            if (!allowed)
                 return Results.NotFound();
 
             if (string.IsNullOrWhiteSpace(req.Email))

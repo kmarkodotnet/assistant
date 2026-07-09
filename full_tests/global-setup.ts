@@ -9,7 +9,7 @@ import { chromium, FullConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-const BASE_URL = 'http://localhost';
+const BASE_URL = 'https://localhost';
 const AUTH_DIR = path.join(__dirname, '.auth');
 
 async function loginAndSave(
@@ -20,7 +20,7 @@ async function loginAndSave(
   storageFile: string
 ): Promise<void> {
   const browser = await chromium.launch();
-  const context = await browser.newContext();
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
 
   const response = await page.request.post(`${BASE_URL}/api/v1/auth/test-login`, {

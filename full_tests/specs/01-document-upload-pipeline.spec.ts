@@ -1,12 +1,15 @@
 /**
- * UC01 — Dokumentum feltöltése + AI pipeline
+ * UC01 — Dokumentum feltöltése UI-on keresztül + AI pipeline ellenőrzése
  * UC07 — Duplikált dokumentum észlelése (SHA256)
  *
- * Runs against the real stack. The AI pipeline (ExtractText → DetectLanguage →
- * Summarize → Embed) is orchestrated by the worker; allow up to 90 s.
+ * Az AI pipeline (ExtractText → DetectLanguage → Summarize → Embed)
+ * a worker által orkestrált, max. 90 mp-et engedélyezünk.
+ * A feltöltés UI-driven: a dropzone file input-ját használjuk.
+ * Pipeline-ellenőrzés: API polling (waitForDocumentProcessed),
+ * majd visszanavigálás és UI-ban a "Done" státusz ellenőrzése.
  */
 import { test, expect } from '@playwright/test';
-import { apiGet, waitForDocumentProcessed } from '../helpers/api';
+import { waitForDocumentProcessed, apiDelete } from '../helpers/api';
 import path from 'path';
 import fs from 'fs';
 
@@ -16,68 +19,84 @@ test.describe('UC01 + UC07 — Document upload & AI pipeline @smoke', () => {
   let docId: string;
 
   test.afterAll(async ({ request }) => {
-    // Cleanup: delete the uploaded document
     if (docId) {
-      await request.delete(`/api/v1/documents/${docId}`);
+      await apiDelete(request, `/documents/${docId}`).catch(() => { /* ignore */ });
     }
   });
 
-  test('UC01-1 POST /documents → 201 with document id', async ({ request }) => {
-    const response = await request.post('/api/v1/documents', {
-      multipart: {
-        file: {
-          name: 'sample.txt',
-          mimeType: 'text/plain',
-          buffer: fs.readFileSync(SAMPLE),
-        },
-      },
+  test('UC01-1 dokumentum feltöltése dropzone-on keresztül', async ({ page }) => {
+    await test.step('Dokumentumok oldal megnyitása', async () => {
+      await page.goto('/documents');
     });
 
-    expect(response.status()).toBe(201);
-
-    const body = await response.json() as Record<string, unknown>;
-    expect(typeof body['id']).toBe('string');
-    expect((body['id'] as string).length).toBeGreaterThan(0);
-
-    docId = body['id'] as string;
-  });
-
-  test('UC01-2 AI pipeline completes — processingStatus reaches Done', async ({ request }) => {
-    test.setTimeout(100_000); // 90 s pipeline + buffer
-
-    expect(docId, 'Previous test must have set docId').toBeTruthy();
-
-    const doc = await waitForDocumentProcessed(request, docId, 90_000);
-    expect(doc['processingStatus']).toBe('Done');
-  });
-
-  test('UC01-3 GET /documents/{id}/text returns non-empty content', async ({ request }) => {
-    expect(docId, 'Previous test must have set docId').toBeTruthy();
-
-    const response = await apiGet(request, `/documents/${docId}/text`);
-    expect(response.ok()).toBeTruthy();
-
-    const body = await response.json() as Record<string, unknown>;
-    const content = body['content'] as string | undefined;
-    expect(content).toBeTruthy();
-    expect((content ?? '').length).toBeGreaterThan(0);
-  });
-
-  test('UC07 duplicate upload → 409 Conflict', async ({ request }) => {
-    expect(docId, 'Previous test must have set docId').toBeTruthy();
-
-    // Upload the exact same bytes again
-    const response = await request.post('/api/v1/documents', {
-      multipart: {
-        file: {
-          name: 'sample.txt',
-          mimeType: 'text/plain',
-          buffer: fs.readFileSync(SAMPLE),
-        },
-      },
+    await test.step('Feltöltési oldalra navigálás', async () => {
+      await page.getByTestId('documents-upload-btn').click();
+      await expect(page).toHaveURL(/\/documents\/upload/);
+      await expect(page.getByTestId('documents-dropzone')).toBeVisible();
     });
 
-    // Must be rejected as a duplicate
-    expect(response.status()).toBe(409);
+    await test.step('Fájl kiválasztása a dropzone-on keresztül', async () => {
+      await page.getByTestId('documents-file-input').setInputFiles(SAMPLE);
+    });
+
+    await test.step('Feltöltés sikeres — "Kész" státusz megjelenik', async () => {
+      await expect(page.getByText('Kész').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('sample.txt')).toBeVisible();
+    });
+
+    await test.step('Dokumentum ID kinyerése API-n keresztül', async () => {
+      const resp = await page.request.get('/api/v1/documents?page=1&pageSize=1');
+      if (resp.ok()) {
+        const body = await resp.json() as Record<string, unknown>;
+        const items = (Array.isArray(body) ? body : (body['items'] as unknown[])) ?? [];
+        if (items.length > 0) {
+          docId = (items[0] as Record<string, unknown>)['id'] as string;
+        }
+      }
+      console.log(`[UC01-1] docId = ${docId}`);
+    });
+  });
+
+  test('UC01-2 AI pipeline befejezése — processingStatus elér Done-t', async ({ request }) => {
+    test.setTimeout(100_000);
+    expect(docId, 'Az előző tesztnek be kell állítania a docId-t').toBeTruthy();
+
+    await test.step('AI pipeline befejezésének megvárása (max 90 mp)', async () => {
+      const doc = await waitForDocumentProcessed(request, docId, 90_000);
+      console.log(`[UC01-2] processingStatus = ${doc['processingStatus']}`);
+      expect(doc['processingStatus']).toBe('Done');
+    });
+  });
+
+  test('UC01-3 UI-on a dokumentum "Done" státuszt mutat a listában', async ({ page }) => {
+    expect(docId, 'Az előző tesztnek be kell állítania a docId-t').toBeTruthy();
+
+    await test.step('Dokumentumok oldal megnyitása', async () => {
+      await page.goto('/documents');
+    });
+
+    await test.step('Dokumentum kártya "Done" státuszt mutat', async () => {
+      const card = page.getByTestId(`doc-card-${docId}`);
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      await expect(card.getByText('Done')).toBeVisible();
+    });
+  });
+
+  test('UC07 duplikált feltöltés → "Már létezik" jelzés a UI-ban', async ({ page }) => {
+    expect(docId, 'UC01-1-nek be kell állítania a docId-t').toBeTruthy();
+
+    await test.step('Feltöltési oldal megnyitása', async () => {
+      await page.goto('/documents/upload');
+      await expect(page.getByTestId('documents-dropzone')).toBeVisible();
+    });
+
+    await test.step('Ugyanazon fájl újbóli feltöltése', async () => {
+      await page.getByTestId('documents-file-input').setInputFiles(SAMPLE);
+    });
+
+    await test.step('Duplikátum jelzés megjelenik', async () => {
+      await expect(page.getByText('Már létezik')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Megnyitom a meglévőt →')).toBeVisible();
+    });
   });
 });

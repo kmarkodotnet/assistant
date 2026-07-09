@@ -22,6 +22,9 @@ e2e/test-results/
 e2e/playwright-report/
 test-results
 
+# Full-stack integration tests — auth storage states contain sensitive cookies
+full_tests/.auth/
+
 # Build results
 
 [Dd]ebug/
