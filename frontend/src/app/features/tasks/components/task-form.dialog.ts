@@ -37,7 +37,7 @@ import type { TaskListItemDto, CreateTaskRequest, PatchTaskRequest } from '../mo
           <div>
             <label class="text-sm font-medium">Cím *</label>
             <input
-              data-testid="task-form-title"
+              data-testid="task-title-input"
               formControlName="title"
               type="text"
               placeholder="Feladat neve..."
@@ -114,7 +114,7 @@ import type { TaskListItemDto, CreateTaskRequest, PatchTaskRequest } from '../mo
 
           <!-- Buttons -->
           <div class="flex gap-3 justify-end pt-2">
-            <ui-button variant="ghost" type="button" (click)="cancel.emit()">
+            <ui-button data-testid="task-cancel" variant="ghost" type="button" (click)="cancel.emit()">
               Mégse
             </ui-button>
             <ui-button

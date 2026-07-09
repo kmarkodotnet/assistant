@@ -33,7 +33,7 @@ type StatusFilter = 'all' | 'upcoming' | 'passed' | 'resolved';
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-semibold">Határidők</h1>
         <button
-          data-testid="deadlines-new-btn"
+          data-testid="deadline-create-btn"
           class="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
           (click)="openCreate()"
         >+ Új határidő</button>

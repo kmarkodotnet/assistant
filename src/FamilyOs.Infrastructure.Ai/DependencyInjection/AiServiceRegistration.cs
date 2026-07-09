@@ -22,10 +22,14 @@ public static class AiServiceRegistration
         services.Configure<OllamaOptions>(configuration.GetSection(OllamaOptions.Section));
         services.Configure<AiPrivacyOptions>(configuration.GetSection(AiPrivacyOptions.Section));
         services.Configure<TesseractOptions>(configuration.GetSection(TesseractOptions.Section));
+        services.Configure<GmailOptions>(configuration.GetSection(GmailOptions.Section));
 
         // Ollama HTTP clients — base URL is set in the constructor via IOptions<OllamaOptions>
         services.AddHttpClient<OllamaHttpClient>();
         services.AddHttpClient<OllamaEmbedder>();
+
+        // Named HttpClient for Gmail API calls
+        services.AddHttpClient("gmail");
 
         // AI providers
         services.AddSingleton<OllamaAiProvider>();
