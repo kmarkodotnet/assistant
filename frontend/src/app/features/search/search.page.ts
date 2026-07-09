@@ -5,12 +5,15 @@ import {
   signal,
   computed,
   OnInit,
+  OnDestroy,
   AfterViewInit,
   ViewChild,
   ElementRef,
   effect,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { SearchFacade } from './services/search.facade';
 import { ChatUserMessageComponent } from './components/chat-user-message.component';
 import { ChatAnswerMessageComponent } from './components/chat-answer-message.component';
@@ -177,14 +180,17 @@ import type { SearchMode, SearchRequest } from './models/search.dto';
     </div>
   `,
 })
-export class SearchPage implements OnInit, AfterViewInit {
+export class SearchPage implements OnInit, AfterViewInit, OnDestroy {
   facade = inject(SearchFacade);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
   @ViewChild('chatContainer') chatContainer!: ElementRef<HTMLDivElement>;
 
   queryText = signal('');
   selectedMode: SearchMode = 'Auto';
   showSaved = signal(false);
+  private paramSub?: Subscription;
 
   canSubmit = computed(() => this.queryText().trim().length > 0 && !this.facade.loading());
 
@@ -198,6 +204,18 @@ export class SearchPage implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.facade.loadSaved();
+    this.paramSub = this.route.queryParamMap.subscribe(params => {
+      const q = params.get('q')?.trim();
+      if (q) {
+        this.queryText.set(q);
+        void this.submit();
+        void this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.paramSub?.unsubscribe();
   }
 
   ngAfterViewInit(): void {

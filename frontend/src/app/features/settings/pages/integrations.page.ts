@@ -1,5 +1,6 @@
-import { Component, ChangeDetectionStrategy, signal, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, inject, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
@@ -82,9 +83,31 @@ import { NotificationService } from '../../../core/notifications/notification.se
     </div>
   `,
 })
-export class IntegrationsPage {
+export class IntegrationsPage implements OnInit {
   private readonly api = inject(SourcesApiService);
   private readonly notify = inject(NotificationService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  ngOnInit(): void {
+    const params = this.route.snapshot.queryParamMap;
+    if (params.get('gmailConnected') === 'true') {
+      this.notify.success('Gmail sikeresen csatlakoztatva!');
+      void this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    }
+    const err = params.get('gmailError');
+    if (err) {
+      const msg: Record<string, string> = {
+        invalid_state: 'Biztonsági ellenőrzés meghiúsult. Próbáld újra.',
+        token_exchange_failed: 'Token csere sikertelen. Ellenőrizd a Gmail OAuth beállításokat.',
+        no_refresh_token: 'Google nem adott vissza refresh tokent. Próbáld újra (revoke + reconnect).',
+        not_configured: 'Gmail OAuth nincs konfigurálva a szerveren.',
+        missing_code: 'Hiányzó authorization code.',
+      };
+      this.notify.error(msg[err] ?? `Gmail hiba: ${err}`);
+      void this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    }
+  }
 
   readonly actionLoading = signal(false);
   readonly sourcesSignal = signal<SourceDto[] | null>(null);

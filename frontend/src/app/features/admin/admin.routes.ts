@@ -5,6 +5,7 @@ export default [
   {
     path: '',
     canActivate: [adminGuard],
+    loadComponent: () => import('./admin.page').then(m => m.AdminPage),
     children: [
       {
         path: '',

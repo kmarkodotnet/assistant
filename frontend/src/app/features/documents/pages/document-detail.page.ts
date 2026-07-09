@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, inject, signal, input, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { DecimalPipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { DocumentsFacade } from '../services/documents.facade';
 import { DocumentsApiService } from '../services/documents.api';
@@ -8,15 +9,31 @@ import { NotificationService } from '../../../core/notifications/notification.se
 import { HuDatePipe } from '../../../shared/pipes/hu-date.pipe';
 import { FileSizePipe } from '../../../shared/pipes/file-size.pipe';
 import { SkeletonComponent } from '../../../shared/ui/skeleton.component';
+import { BadgeComponent } from '../../../shared/ui/badge.component';
+import { TagsService, TagDto } from '../../../core/api/tags.service';
+import { TopicsService, TopicDto } from '../../../core/api/topics.service';
 import { firstValueFrom } from 'rxjs';
 import type { DocumentTextDto } from '../models/document.dto';
 
 type Tab = 'overview' | 'text' | 'tags';
 
+const STATUS_LABEL: Record<string, string> = {
+  Pending: 'Várakozik', Extracting: 'Szöveg kinyerés', Analyzing: 'Elemzés', Done: 'Kész', Failed: 'Hiba',
+};
+const STATUS_BADGE: Record<string, 'success' | 'danger' | 'info' | 'default'> = {
+  Done: 'success', Failed: 'danger', Extracting: 'info', Analyzing: 'info', Pending: 'default',
+};
+const EXTRACTION_LABEL: Record<string, string> = {
+  PdfTextLayer: 'PDF szövegréteg', TesseractOcr: 'OCR (Tesseract)', ManualPaste: 'Kézi bevitel', EmailBody: 'E-mail törzs',
+};
+const SOURCE_LABEL: Record<string, string> = {
+  Upload: 'Feltöltve', Email: 'E-mailből', Manual: 'Kézi',
+};
+
 @Component({
   selector: 'app-document-detail-page',
   standalone: true,
-  imports: [RouterLink, FormsModule, TranslateModule, HuDatePipe, FileSizePipe, SkeletonComponent],
+  imports: [RouterLink, FormsModule, DecimalPipe, TranslateModule, HuDatePipe, FileSizePipe, SkeletonComponent, BadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="max-w-4xl mx-auto">
@@ -24,11 +41,18 @@ type Tab = 'overview' | 'text' | 'tags';
 
       @if (facade.detail(); as doc) {
         <div class="mt-4">
-          <h1 class="text-2xl font-bold" data-testid="detail-title">{{ doc.title }}</h1>
+          <div class="flex items-start justify-between gap-4">
+            <h1 class="text-2xl font-bold" data-testid="detail-title">{{ doc.title }}</h1>
+            <ui-badge [variant]="statusBadge(doc.processingStatus)">
+              {{ statusLabel(doc.processingStatus) }}
+            </ui-badge>
+          </div>
           <div class="flex gap-4 mt-2 text-sm text-[var(--color-text-muted)]">
             <span>{{ doc.sizeBytes | fileSize }}</span>
             @if (doc.documentDate) { <span>{{ doc.documentDate | huDate }}</span> }
             <span>{{ doc.createdUtc | huDate }}</span>
+            <span>{{ sourceLabel(doc.sourceType) }}</span>
+            @if (doc.isPrivate) { <span class="text-warning-600 font-medium">Privát</span> }
           </div>
 
           <!-- Tabs -->
@@ -45,16 +69,67 @@ type Tab = 'overview' | 'text' | 'tags';
             }
           </div>
 
-          <!-- Tab tartalom -->
+          <!-- Overview tab -->
           @if (activeTab() === 'overview') {
-            <div class="mt-4">
-              <p class="text-sm text-[var(--color-text-muted)]">AI összefoglaló: hamarosan elérhető (Epic D után).</p>
+            <div class="mt-5 space-y-4">
+
+              <!-- Text extraction metadata -->
               @if (doc.textSummary) {
-                <p class="text-sm mt-2">Karakterszám: {{ doc.textSummary.charCount }} · Nyelv: {{ doc.textSummary.languageDetected ?? 'ismeretlen' }}</p>
+                <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
+                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Szöveg kinyerés</p>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div>
+                      <p class="text-xs text-[var(--color-text-muted)]">Karakterszám</p>
+                      <p class="text-sm font-medium mt-0.5">{{ doc.textSummary.charCount | number }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-[var(--color-text-muted)]">Nyelv</p>
+                      <p class="text-sm font-medium mt-0.5">{{ doc.textSummary.languageDetected ?? 'Ismeretlen' }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-[var(--color-text-muted)]">Módszer</p>
+                      <p class="text-sm font-medium mt-0.5">{{ extractionLabel(doc.textSummary.extractionMethod) }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-[var(--color-text-muted)]">Szerkesztve</p>
+                      <p class="text-sm font-medium mt-0.5">{{ doc.textSummary.isManuallyEdited ? 'Igen' : 'Nem' }}</p>
+                    </div>
+                  </div>
+                </div>
+              } @else if (doc.processingStatus !== 'Done' && doc.processingStatus !== 'Failed') {
+                <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4 flex items-center gap-3">
+                  <div class="w-2 h-2 bg-primary-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <p class="text-sm text-[var(--color-text-muted)]">Szöveg kinyerés folyamatban...</p>
+                </div>
               }
+
+              <!-- AI summary placeholder -->
+              <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
+                <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2">AI összefoglaló</p>
+                @if (doc.processingStatus === 'Done') {
+                  <p class="text-sm text-[var(--color-text-muted)]">Az AI összefoglaló generálása a háttérben zajlik — hamarosan megjelenik itt.</p>
+                } @else if (doc.processingStatus === 'Failed') {
+                  <p class="text-sm text-danger-600">A feldolgozás meghiúsult. Próbáld meg újraindítani az újrafeldolgozást.</p>
+                } @else {
+                  <p class="text-sm text-[var(--color-text-muted)]">Az összefoglaló a feldolgozás befejezése után lesz elérhető.</p>
+                }
+              </div>
+
+              <!-- Reprocess -->
+              <div class="flex justify-end">
+                <button
+                  data-testid="detail-reprocess"
+                  class="px-4 py-2 text-sm border border-[var(--color-border)] rounded-xl text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  [disabled]="reprocessing()"
+                  (click)="reprocess()"
+                >
+                  {{ reprocessing() ? 'Elindítás...' : '↺ Újrafeldolgozás' }}
+                </button>
+              </div>
             </div>
           }
 
+          <!-- Text tab -->
           @if (activeTab() === 'text') {
             <div class="mt-4">
               @if (loadingText()) {
@@ -78,9 +153,63 @@ type Tab = 'overview' | 'text' | 'tags';
             </div>
           }
 
+          <!-- Tags tab -->
           @if (activeTab() === 'tags') {
-            <div class="mt-4">
-              <p class="text-sm text-[var(--color-text-muted)]">Címkék és témák: hamarosan elérhető (Epic I után).</p>
+            <div class="mt-5 space-y-5">
+              @if (loadingTagsTopics()) {
+                <ui-skeleton height="60px" cssClass="mb-3" />
+                <ui-skeleton height="120px" />
+              } @else {
+                <!-- Info banner -->
+                <div class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+                  <svg class="w-4 h-4 mt-0.5 shrink-0 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                  </svg>
+                  <p>A dokumentumhoz rendelt specifikus címkék és témák az AI feldolgozás alapján jelennek meg. A kézi hozzárendelés hamarosan elérhető.</p>
+                </div>
+
+                <!-- Global tags -->
+                <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
+                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Rendszer-szintű címkék</p>
+                  @if (tags().length === 0) {
+                    <p class="text-sm text-[var(--color-text-muted)]">Még nincsenek címkék a rendszerben.</p>
+                  } @else {
+                    <div class="flex flex-wrap gap-2">
+                      @for (tag of tags(); track tag.id) {
+                        <span
+                          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border"
+                          [style.background-color]="tag.color ? tag.color + '22' : ''"
+                          [style.border-color]="tag.color ?? 'var(--color-border)'"
+                          [style.color]="tag.color ?? 'var(--color-text)'"
+                        >
+                          {{ tag.name }}
+                          @if (tag.usageCount > 0) {
+                            <span class="opacity-60">{{ tag.usageCount }}</span>
+                          }
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- Global topics -->
+                <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
+                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Rendszer-szintű témák</p>
+                  @if (topics().length === 0) {
+                    <p class="text-sm text-[var(--color-text-muted)]">Még nincsenek témák a rendszerben.</p>
+                  } @else {
+                    <div class="space-y-1">
+                      @for (topic of topics(); track topic.id) {
+                        <div class="flex items-center gap-2 py-1">
+                          @if (topic.icon) { <span class="text-base">{{ topic.icon }}</span> }
+                          <span class="text-sm">{{ topic.name }}</span>
+                          <span class="text-xs text-[var(--color-text-muted)]">/{{ topic.slug }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             </div>
           }
         </div>
@@ -99,17 +228,23 @@ export class DocumentDetailPage implements OnInit {
   facade = inject(DocumentsFacade);
   private api = inject(DocumentsApiService);
   private notify = inject(NotificationService);
+  private tagsService = inject(TagsService);
+  private topicsService = inject(TopicsService);
 
   activeTab = signal<Tab>('overview');
   loadingText = signal(false);
   docText = signal<DocumentTextDto | null>(null);
   editingText = signal(false);
   editedContent = '';
+  reprocessing = signal(false);
+  tags = signal<TagDto[]>([]);
+  topics = signal<TopicDto[]>([]);
+  loadingTagsTopics = signal(false);
 
   tabs = [
     { id: 'overview' as Tab, label: 'Áttekintés' },
     { id: 'text' as Tab, label: 'Szöveg' },
-    { id: 'tags' as Tab, label: 'Címkék' },
+    { id: 'tags' as Tab, label: 'Címkék & Témák' },
   ];
 
   ngOnInit(): void { void this.facade.loadDetail(this.id()); }
@@ -119,6 +254,30 @@ export class DocumentDetailPage implements OnInit {
     if (tab === 'text' && !this.docText() && !this.loadingText()) {
       void this.loadText();
     }
+    if (tab === 'tags' && this.tags().length === 0 && !this.loadingTagsTopics()) {
+      void this.loadTagsTopics();
+    }
+  }
+
+  statusBadge(s: string): 'success' | 'danger' | 'info' | 'default' {
+    return STATUS_BADGE[s] ?? 'default';
+  }
+
+  statusLabel(s: string): string { return STATUS_LABEL[s] ?? s; }
+  extractionLabel(s: string): string { return EXTRACTION_LABEL[s] ?? s; }
+  sourceLabel(s: string): string { return SOURCE_LABEL[s] ?? s; }
+
+  async reprocess(): Promise<void> {
+    this.reprocessing.set(true);
+    try {
+      await firstValueFrom(this.api.reprocess(this.id(), []));
+      this.notify.success('Újrafeldolgozás elindítva.');
+      void this.facade.loadDetail(this.id());
+    } catch {
+      this.notify.error('Nem sikerült elindítani az újrafeldolgozást.');
+    } finally {
+      this.reprocessing.set(false);
+    }
   }
 
   private async loadText(): Promise<void> {
@@ -127,16 +286,32 @@ export class DocumentDetailPage implements OnInit {
       const text = await firstValueFrom(this.api.getText(this.id()));
       this.docText.set(text);
     } catch {
-      // 404: a szöveg még nincs kinyerve — marad a "folyamatban van" üzenet
+      // 404: szöveg még nincs kinyerve
     } finally {
       this.loadingText.set(false);
+    }
+  }
+
+  private async loadTagsTopics(): Promise<void> {
+    this.loadingTagsTopics.set(true);
+    try {
+      const [tags, topics] = await Promise.all([
+        this.tagsService.list({ sort: 'usageCount:desc', pageSize: 200 }),
+        this.topicsService.list(true),
+      ]);
+      this.tags.set(tags);
+      this.topics.set(topics);
+    } catch {
+      // ignore: üres lista marad
+    } finally {
+      this.loadingTagsTopics.set(false);
     }
   }
 
   async startEditText(): Promise<void> {
     if (!this.docText()) {
       await this.loadText();
-      if (!this.docText()) { return; }
+      if (!this.docText()) return;
     }
     this.editedContent = this.docText()?.content ?? '';
     this.editingText.set(true);
