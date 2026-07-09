@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Abstractions.Storage;
 using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Common.Errors;
+using FamilyOs.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,17 @@ public sealed class DeleteDocumentCommandHandler(
 
         if (!authService.CanWriteDocument(doc))
             throw new ForbiddenException("Nincs jogosultsága törölni ezt a dokumentumot.");
+
+        // Cancel any active jobs so workers skip them, then delete all job records.
+        var jobs = await db.AiProcessingJobs
+            .Where(j => j.TargetId == cmd.DocumentId && j.TargetType == JobTargetType.Document)
+            .ToListAsync(cancellationToken);
+
+        foreach (var job in jobs.Where(j => j.Status is JobStatus.Queued or JobStatus.Running or JobStatus.Failed))
+            job.Cancel();
+
+        await db.SaveChangesAsync(cancellationToken);
+        db.AiProcessingJobs.RemoveRange(jobs);
 
         if (cmd.Hard)
         {

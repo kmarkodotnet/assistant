@@ -1,9 +1,12 @@
+using FamilyOs.Application.Documents.AddDocumentTopic;
 using FamilyOs.Application.Documents.DeleteDocument;
 using FamilyOs.Application.Documents.DownloadDocument;
+using FamilyOs.Application.Documents.GetDocumentClassification;
 using FamilyOs.Application.Documents.GetDocumentDetail;
 using FamilyOs.Application.Documents.GetDocumentText;
 using FamilyOs.Application.Documents.ListDocuments;
 using FamilyOs.Application.Documents.PatchDocument;
+using FamilyOs.Application.Documents.RemoveDocumentTopic;
 using FamilyOs.Application.Documents.ReprocessDocument;
 using FamilyOs.Application.Documents.UpdateDocumentText;
 using FamilyOs.Application.Documents.UploadDocument;
@@ -65,6 +68,13 @@ public static class DocumentsModule
             return Results.Ok(dto);
         });
 
+        // GET /api/v1/documents/{id}/classification
+        group.MapGet("/{id:guid}/classification", async (Guid id, ISender sender, CancellationToken ct) =>
+        {
+            var dto = await sender.Send(new GetDocumentClassificationQuery(id), ct);
+            return Results.Ok(dto);
+        });
+
         // GET /api/v1/documents/{id}/content
         group.MapGet("/{id:guid}/content", async (Guid id, ISender sender, HttpContext ctx, CancellationToken ct) =>
         {
@@ -111,8 +121,20 @@ public static class DocumentsModule
         // Tag stubs (T-CBE-17)
         group.MapPost("/{id:guid}/tags", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
         group.MapDelete("/{id:guid}/tags/{tagId:guid}", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
-        group.MapPost("/{id:guid}/topics", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
-        group.MapDelete("/{id:guid}/topics/{topicId:guid}", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
+
+        // POST /api/v1/documents/{id}/topics
+        group.MapPost("/{id:guid}/topics", async (Guid id, AddDocumentTopicRequest req, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new AddDocumentTopicCommand(id, req.TopicId), ct);
+            return Results.Ok();
+        }).RequireAuthorization("RequireAdult");
+
+        // DELETE /api/v1/documents/{id}/topics/{topicId}
+        group.MapDelete("/{id:guid}/topics/{topicId:guid}", async (Guid id, Guid topicId, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new RemoveDocumentTopicCommand(id, topicId), ct);
+            return Results.NoContent();
+        }).RequireAuthorization("RequireAdult");
 
         // Facet PATCH stubs (T-CBE-18)
         group.MapMethods("/{id:guid}/warranty", ["PATCH"], () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
@@ -124,3 +146,4 @@ public static class DocumentsModule
 public record UpdateDocumentTextRequest(string Content);
 public record PatchDocumentRequest(string? Title, DateOnly? DocumentDate, Guid? RelatedFamilyMemberId, bool? IsPrivate, string? RowVersion);
 public record ReprocessDocumentRequest(IReadOnlyList<string>? Jobs);
+public record AddDocumentTopicRequest(Guid TopicId);

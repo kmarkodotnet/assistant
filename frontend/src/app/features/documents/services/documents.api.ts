@@ -4,6 +4,28 @@ import { Observable } from 'rxjs';
 import type { DocumentDto, DocumentDetailDto, DocumentListResponse, DocumentTextDto } from '../models/document.dto';
 import type { DocumentFilter } from '../models/document-filter.model';
 
+export interface ClassificationTagDto {
+  id: string;
+  name: string;
+  color: string | null;
+  origin: string;
+  isApproved: boolean;
+}
+
+export interface ClassificationTopicDto {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  origin: string;
+  isApproved: boolean;
+}
+
+export interface DocumentClassificationDto {
+  tags: ClassificationTagDto[];
+  topics: ClassificationTopicDto[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class DocumentsApiService {
   private http = inject(HttpClient);
@@ -51,5 +73,17 @@ export class DocumentsApiService {
 
   reprocess(id: string, jobs: string[]): Observable<void> {
     return this.http.post<void>(`${this.base}/${id}/reprocess`, { jobs });
+  }
+
+  getClassification(id: string): Observable<DocumentClassificationDto> {
+    return this.http.get<DocumentClassificationDto>(`${this.base}/${id}/classification`);
+  }
+
+  addTopic(id: string, topicId: string): Observable<void> {
+    return this.http.post<void>(`${this.base}/${id}/topics`, { topicId });
+  }
+
+  removeTopic(id: string, topicId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}/topics/${topicId}`);
   }
 }

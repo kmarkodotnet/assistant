@@ -2,9 +2,11 @@ using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Application.Common.Ai;
 using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
+using FamilyOs.Infrastructure.Ai.Options;
 using FamilyOs.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyOs.Workers.Services;
 
@@ -14,6 +16,7 @@ public sealed class DetectLanguageJobRunner
     private readonly ILanguageDetector _languageDetector;
     private readonly IAiProcessingJobRepository _jobRepository;
     private readonly ILogger<DetectLanguageJobRunner> _logger;
+    private readonly OllamaOptions _ollamaOptions;
 
     // LoggerMessage delegates (CA1848 compliance)
     private static readonly Action<ILogger, Guid, Exception?> LogDocTextNotFound =
@@ -28,12 +31,14 @@ public sealed class DetectLanguageJobRunner
         FamilyOsDbContext db,
         ILanguageDetector languageDetector,
         IAiProcessingJobRepository jobRepository,
-        ILogger<DetectLanguageJobRunner> logger)
+        ILogger<DetectLanguageJobRunner> logger,
+        IOptions<OllamaOptions> ollamaOptions)
     {
         _db = db;
         _languageDetector = languageDetector;
         _jobRepository = jobRepository;
         _logger = logger;
+        _ollamaOptions = ollamaOptions.Value;
     }
 
     public async Task RunAsync(AiProcessingJob job, CancellationToken ct)
@@ -49,13 +54,21 @@ public sealed class DetectLanguageJobRunner
             return;
         }
 
-        // 2. Detect language from first 1000 chars of the extracted text
-        var snippet = docText.Content.Length > 1000
-            ? docText.Content[..1000]
-            : docText.Content;
-
-        var detected = _languageDetector.Detect(snippet);
-        var langCode = detected == "unknown" ? null : detected;
+        // 2. Detect language — skip AI if only one language is configured
+        var supportedLanguages = _ollamaOptions.GetSupportedLanguages();
+        string? langCode;
+        if (supportedLanguages.Length == 1)
+        {
+            langCode = supportedLanguages[0];
+        }
+        else
+        {
+            var snippet = docText.Content.Length > 1000
+                ? docText.Content[..1000]
+                : docText.Content;
+            var detected = _languageDetector.Detect(snippet);
+            langCode = detected == "unknown" ? null : detected;
+        }
 
         // 3. Persist language on DocumentText and Document
         docText.SetLanguageDetected(langCode);

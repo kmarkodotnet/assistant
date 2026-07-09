@@ -6,4 +6,8 @@ public sealed class OllamaOptions
     public string BaseUrl { get; set; } = "http://ollama:11434";
     public string DefaultModel { get; set; } = "llama3.2:3b";
     public int TimeoutSeconds { get; set; } = 120;
+    public string SupportedLanguages { get; set; } = "hu";
+
+    public string[] GetSupportedLanguages() =>
+        SupportedLanguages.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

@@ -1,17 +1,16 @@
-import { Component, ChangeDetectionStrategy, inject, signal, input, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal, computed, input, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { DocumentsFacade } from '../services/documents.facade';
-import { DocumentsApiService } from '../services/documents.api';
+import { DocumentsApiService, ClassificationTagDto, ClassificationTopicDto } from '../services/documents.api';
+import { TopicsService, TopicDto } from '../../../core/api/topics.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { HuDatePipe } from '../../../shared/pipes/hu-date.pipe';
 import { FileSizePipe } from '../../../shared/pipes/file-size.pipe';
 import { SkeletonComponent } from '../../../shared/ui/skeleton.component';
 import { BadgeComponent } from '../../../shared/ui/badge.component';
-import { TagsService, TagDto } from '../../../core/api/tags.service';
-import { TopicsService, TopicDto } from '../../../core/api/topics.service';
 import { firstValueFrom } from 'rxjs';
 import type { DocumentTextDto } from '../models/document.dto';
 
@@ -168,11 +167,11 @@ const SOURCE_LABEL: Record<string, string> = {
                   <p>A dokumentumhoz rendelt specifikus címkék és témák az AI feldolgozás alapján jelennek meg. A kézi hozzárendelés hamarosan elérhető.</p>
                 </div>
 
-                <!-- Global tags -->
+                <!-- Document tags -->
                 <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
-                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Rendszer-szintű címkék</p>
+                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Hozzárendelt címkék</p>
                   @if (tags().length === 0) {
-                    <p class="text-sm text-[var(--color-text-muted)]">Még nincsenek címkék a rendszerben.</p>
+                    <p class="text-sm text-[var(--color-text-muted)]">Még nem kerültek felismerésre az AI által.</p>
                   } @else {
                     <div class="flex flex-wrap gap-2">
                       @for (tag of tags(); track tag.id) {
@@ -183,29 +182,50 @@ const SOURCE_LABEL: Record<string, string> = {
                           [style.color]="tag.color ?? 'var(--color-text)'"
                         >
                           {{ tag.name }}
-                          @if (tag.usageCount > 0) {
-                            <span class="opacity-60">{{ tag.usageCount }}</span>
-                          }
                         </span>
                       }
                     </div>
                   }
                 </div>
 
-                <!-- Global topics -->
+                <!-- Document topics -->
                 <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4">
-                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Rendszer-szintű témák</p>
+                  <p class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">Kapcsolódó témák</p>
                   @if (topics().length === 0) {
-                    <p class="text-sm text-[var(--color-text-muted)]">Még nincsenek témák a rendszerben.</p>
+                    <p class="text-sm text-[var(--color-text-muted)] mb-3">Még nincs hozzárendelt téma.</p>
                   } @else {
-                    <div class="space-y-1">
+                    <div class="space-y-1 mb-3">
                       @for (topic of topics(); track topic.id) {
                         <div class="flex items-center gap-2 py-1">
                           @if (topic.icon) { <span class="text-base">{{ topic.icon }}</span> }
-                          <span class="text-sm">{{ topic.name }}</span>
+                          <span class="text-sm flex-1">{{ topic.name }}</span>
                           <span class="text-xs text-[var(--color-text-muted)]">/{{ topic.slug }}</span>
+                          <button
+                            (click)="removeTopic(topic.id)"
+                            class="text-xs text-danger-600 hover:text-danger-800 px-1.5 py-0.5 rounded hover:bg-danger-50 transition-colors"
+                            title="Téma eltávolítása"
+                          >×</button>
                         </div>
                       }
+                    </div>
+                  }
+                  <!-- Add topic -->
+                  @if (availableTopics().length > 0) {
+                    <div class="flex gap-2 items-center pt-2 border-t border-[var(--color-border)]">
+                      <select
+                        [(ngModel)]="selectedTopicId"
+                        class="flex-1 text-sm border border-[var(--color-border)] rounded-lg px-3 py-1.5 bg-[var(--color-bg)]"
+                      >
+                        <option value="">— Válassz témát —</option>
+                        @for (topic of availableTopics(); track topic.id) {
+                          <option [value]="topic.id">{{ topic.icon ? topic.icon + ' ' : '' }}{{ topic.name }}</option>
+                        }
+                      </select>
+                      <button
+                        (click)="addTopic()"
+                        [disabled]="!selectedTopicId || savingTopic()"
+                        class="text-sm px-3 py-1.5 bg-primary-600 text-white rounded-lg disabled:opacity-40 hover:bg-primary-700 transition-colors"
+                      >Hozzáad</button>
                     </div>
                   }
                 </div>
@@ -227,9 +247,8 @@ export class DocumentDetailPage implements OnInit {
 
   facade = inject(DocumentsFacade);
   private api = inject(DocumentsApiService);
+  private topicsApi = inject(TopicsService);
   private notify = inject(NotificationService);
-  private tagsService = inject(TagsService);
-  private topicsService = inject(TopicsService);
 
   activeTab = signal<Tab>('overview');
   loadingText = signal(false);
@@ -237,9 +256,17 @@ export class DocumentDetailPage implements OnInit {
   editingText = signal(false);
   editedContent = '';
   reprocessing = signal(false);
-  tags = signal<TagDto[]>([]);
-  topics = signal<TopicDto[]>([]);
+  tags = signal<ClassificationTagDto[]>([]);
+  topics = signal<ClassificationTopicDto[]>([]);
   loadingTagsTopics = signal(false);
+  allTopics = signal<TopicDto[]>([]);
+  savingTopic = signal(false);
+  selectedTopicId = '';
+
+  availableTopics = computed(() => {
+    const assigned = new Set(this.topics().map(t => t.id));
+    return this.allTopics().filter(t => !assigned.has(t.id));
+  });
 
   tabs = [
     { id: 'overview' as Tab, label: 'Áttekintés' },
@@ -295,16 +322,46 @@ export class DocumentDetailPage implements OnInit {
   private async loadTagsTopics(): Promise<void> {
     this.loadingTagsTopics.set(true);
     try {
-      const [tags, topics] = await Promise.all([
-        this.tagsService.list({ sort: 'usageCount:desc', pageSize: 200 }),
-        this.topicsService.list(true),
+      const [classification, allTopics] = await Promise.all([
+        firstValueFrom(this.api.getClassification(this.id())),
+        this.topicsApi.list(true),
       ]);
-      this.tags.set(tags);
-      this.topics.set(topics);
+      this.tags.set(classification.tags);
+      this.topics.set(classification.topics);
+      this.allTopics.set(allTopics);
     } catch {
-      // ignore: üres lista marad
+      // ignore
     } finally {
       this.loadingTagsTopics.set(false);
+    }
+  }
+
+  async addTopic(): Promise<void> {
+    if (!this.selectedTopicId || this.savingTopic()) return;
+    this.savingTopic.set(true);
+    try {
+      await firstValueFrom(this.api.addTopic(this.id(), this.selectedTopicId));
+      const added = this.allTopics().find(t => t.id === this.selectedTopicId);
+      if (added) {
+        this.topics.update(list => [...list, {
+          id: added.id, name: added.name, slug: added.slug,
+          icon: added.icon, origin: 'Manual', isApproved: true,
+        }]);
+      }
+      this.selectedTopicId = '';
+    } catch {
+      this.notify.error('Nem sikerült hozzáadni a témát.');
+    } finally {
+      this.savingTopic.set(false);
+    }
+  }
+
+  async removeTopic(topicId: string): Promise<void> {
+    try {
+      await firstValueFrom(this.api.removeTopic(this.id(), topicId));
+      this.topics.update(list => list.filter(t => t.id !== topicId));
+    } catch {
+      this.notify.error('Nem sikerült eltávolítani a témát.');
     }
   }
 
