@@ -1,6 +1,7 @@
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Common.Errors;
+using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -22,9 +23,22 @@ public sealed class ReprocessDocumentCommandHandler(
             throw new ForbiddenException("Nincs jogosultsága újrafeldolgozni ezt a dokumentumot.");
 
         doc.SetProcessingStatus(ProcessingStatus.Pending);
+
+        // Cancel any existing non-terminal jobs for this document
+        var existingJobs = await db.AiProcessingJobs
+            .Where(j => j.TargetId == cmd.DocumentId
+                        && (j.Status == JobStatus.Queued || j.Status == JobStatus.Failed || j.Status == JobStatus.Running))
+            .ToListAsync(cancellationToken);
+
+        foreach (var job in existingJobs)
+            job.Cancel();
+
+        // Enqueue a fresh ExtractText job to restart the pipeline
+        var extractJob = AiProcessingJob.Create(AiJobType.ExtractText, doc.Id);
+        db.AiProcessingJobs.Add(extractJob);
+
         await db.SaveChangesAsync(cancellationToken);
 
-        // AI job scheduling is Epic D — return empty list for now
-        return new ReprocessResult(Array.Empty<Guid>());
+        return new ReprocessResult([extractJob.Id]);
     }
 }
