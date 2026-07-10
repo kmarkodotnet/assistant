@@ -64,11 +64,26 @@ Vezérlőelvek:
 
 ### 2.2 Teljes szöveges keresés (full-text)
 
-- **Cél:** szabad-szavas kereső a dokumentumszövegekben és jegyzetekben
-  (klasszikus „kereső doboz").
-- **Implementáció:** PostgreSQL `tsvector` + `tsquery` a `hungarian_unaccent`
-  konfigon (lásd `database-schema.md`).
-- **Lekérdezés-minta:**
+- **Cél:** szabad-szavas kereső dokumentumokban, jegyzetekben, feladatokban
+  és határidőkben (klasszikus „kereső doboz").
+- **Implementáció:** EF Core LINQ `.Contains()` alapú szövegkeresés; a
+  document/note entitásoknál `tsvector` index is elérhető (lásd 2.2.1).
+- **Lefedett entitások:** Document (tartalomszöveg + cím), Note (cím + törzs),
+  Task (cím + leírás), Deadline (cím + leírás), Reminder (kapcsolódó
+  Task/Deadline cím + snoozeNote), Suggestion (Suggested státuszú Task-ok).
+- **PrimaryWord fallback:** több szavas lekérdezésnél (pl. „áramszámla
+  határideje") az FTS a teljes kifejezésen kívül a leghosszabb (≥4 karakter)
+  szót is önállóan keresi OR-ral. Így a „áramszámla határideje" keresés
+  megtalálja az „áramszámla befizetése" határidőt is, ahol a teljes phrase
+  nem szerepel.
+  ```csharp
+  var tokens = q.Split(' ', RemoveEmpty | TrimEntries);
+  var primaryWord = tokens.Length > 1
+      ? tokens.OrderByDescending(w => w.Length).FirstOrDefault(w => w.Length >= 4) ?? q
+      : q;
+  // WHERE Title.Contains(q) OR Title.Contains(primaryWord) OR ...
+  ```
+- **Document FTS lekérdezés-minta (tsvector alapú):**
   ```sql
   SELECT d.id, d.title, ts_rank(dt.tsv, q) AS rank,
          ts_headline('hungarian_unaccent', dt.content, q,
@@ -83,10 +98,10 @@ Vezérlőelvek:
   LIMIT  50;
   ```
 - **Notes:**
-  - `websearch_to_tsquery` támogatja a `"kifejezés"`, `-szó`, `OR` szintaxist
-    a UI-on.
-  - A `ts_headline` adja a UI-snippet-et („…szöveg…lényeges rész…").
-  - A `note` táblán hasonló lekérdezés fut; UNION ALL a két source között.
+  - `websearch_to_tsquery` támogatja a `"kifejezés"`, `-szó`, `OR` szintaxist.
+  - A `ts_headline` adja a UI-snippet-et.
+  - Task és Deadline esetén a `.Contains()` alapú keresés nincs tsvector-ra
+    optimalizálva (kis adatmennyiség mellett elegendő); v2-ben GIN index ide is.
 
 ### 2.3 Szemantikus / vektor keresés (pgvector)
 
@@ -95,24 +110,54 @@ Vezérlőelvek:
 - **Implementáció:**
   - Kérdés/szöveg embedding: `IEmbedder.EmbedAsync(query)` →
     `vector(768)` (`nomic-embed-text`).
-  - HNSW index `document_chunk` és `note_chunk` táblákon, cosine similarity.
+  - HNSW index `document_chunk`, `note_chunk`, `task_chunk` és
+    `deadline_chunk` táblákon, cosine similarity.
+- **Minimum similarity küszöb:**
+  - Standalone szemantikus keresés (`mode=semantic`): **0.50** — alacsony
+    relevancia-pontszámú (triviálisan tárgyatlan) találatok kiszűrésére.
+  - Hibrid / Q&A kontextus-gyűjtés (`mode=auto`, `mode=qa`): **0.20** —
+    szélesebb hálóval dolgozik, az RRF-fusion úgyis rendet rak.
 - **Lekérdezés-minta:**
   ```sql
-  -- külön a két chunk-table-re, UNION-nal a végén
-  WITH q AS (SELECT :query_embedding::vector AS v)
-  SELECT  dc.document_id AS source_id, 'Document' AS source_type,
-          dc.chunk_index, dc.content,
-          1 - (dc.embedding <=> q.v) AS similarity
-  FROM    app.document_chunk dc
-  JOIN    app.document d ON d.id = dc.document_id
-  CROSS   JOIN q
-  WHERE   d.deleted_utc IS NULL
-    AND   (d.is_private = false OR d.created_by_user_account_id = :current_user)
-    AND   dc.embedding_model = :current_model
-  ORDER BY dc.embedding <=> q.v
-  LIMIT   20
-  -- + ugyanez note_chunk-on
-  ;
+  SELECT entity_type, entity_id, chunk_id, snippet, score FROM (
+      SELECT 'document' AS entity_type,
+             dc.document_id AS entity_id, dc.id AS chunk_id,
+             dc.content AS snippet,
+             1 - (dc.embedding <=> :vector) AS score
+      FROM app.document_chunk dc
+      JOIN app.document d ON d.id = dc.document_id
+      WHERE dc.embedding IS NOT NULL AND dc.embedding_model = :model
+        AND d.deleted_utc IS NULL
+        AND (:userId IS NULL OR d.is_private = false
+             OR d.created_by_user_account_id = :userId)
+      UNION ALL
+      SELECT 'note', nc.note_id, nc.id, nc.content,
+             1 - (nc.embedding <=> :vector)
+      FROM app.note_chunk nc JOIN app.note n ON n.id = nc.note_id
+      WHERE nc.embedding IS NOT NULL AND nc.embedding_model = :model
+        AND n.deleted_utc IS NULL
+        AND (:userId IS NULL OR n.is_private = false
+             OR n.created_by_user_account_id = :userId)
+      UNION ALL
+      SELECT 'task', tc.task_id, tc.id, tc.content,
+             1 - (tc.embedding <=> :vector)
+      FROM app.task_chunk tc JOIN app.task t ON t.id = tc.task_id
+      WHERE tc.embedding IS NOT NULL AND tc.embedding_model = :model
+        AND t.deleted_utc IS NULL
+        AND (:userId IS NULL OR t.is_private = false
+             OR t.created_by_user_account_id = :userId)
+      UNION ALL
+      SELECT 'deadline', dc2.deadline_id, dc2.id, dc2.content,
+             1 - (dc2.embedding <=> :vector)
+      FROM app.deadline_chunk dc2 JOIN app.deadline d2 ON d2.id = dc2.deadline_id
+      WHERE dc2.embedding IS NOT NULL AND dc2.embedding_model = :model
+        AND d2.deleted_utc IS NULL
+        AND (:userId IS NULL OR d2.is_private = false
+             OR d2.created_by_user_account_id = :userId)
+  ) combined
+  WHERE score >= :minSimilarity
+  ORDER BY score DESC
+  LIMIT :limit;
   ```
 - **`embedding_model` szűrés kötelező** — vegyes modellből származó vektorokat
   nem hasonlítunk össze; ez a fokozatos modell-migráció biztonsági kapuja.

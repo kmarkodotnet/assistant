@@ -309,17 +309,23 @@ a prompt template a facet típusa alapján kerül kiválasztásra.
 
 ### 3.9 Embedding generálás (`JobType = Embed`)
 
-- **Cél:** A dokumentum/jegyzet szövegét chunkolni, és minden chunk-ra
-  embeddinget generálni → `DocumentChunk` / `NoteChunk`.
+- **Cél:** A tartalom chunkolása és minden chunk-ra embedding generálása →
+  `DocumentChunk` / `NoteChunk` / `TaskChunk` / `DeadlineChunk`.
+- **Érintett entity-típusok:**
+  - **Document:** a `DocumentText.Content` alapján (OCR/szöveg-kinyerés eredménye).
+  - **Note:** a `Note.Body` alapján.
+  - **Task:** szintetizált szöveg formátuma: `"Feladat: {Title}\nPrioritás: {Priority}\n{Description}\nEsedékes: {yyyy-MM-dd}"`.
+  - **Deadline:** szintetizált szöveg formátuma: `"Határidő: {Title}\nKategória: {Category}\nEsedékes: {yyyy-MM-dd}\n{Description}"`.
+- **Trigger:**
+  - Document/Note: az AI pipeline 3. lépésében (DetectLanguage után) enqueue-olódik.
+  - Task/Deadline: a `Create` és `Patch` command handler-ek enqueue-olnak egy `Embed` jobot minden egyes mentés után.
+  - **Backfill:** az `EmbedBackfillService` (Workers startup) felkutatja a chunk nélküli Task és Deadline rekordokat (pl. az embedding infrastruktúra bevezetése előtt létrehozottakat) és Embed jobokat vesz fel hozzájuk.
 - **Algoritmus:**
-  1. A `DocumentText.Content`-et szakaszokra bontjuk (preferáltan
-     bekezdés-határok mentén, max 800 token / chunk, ~100 token overlap-pel).
+  1. A szöveget szakaszokra bontjuk (preferáltan bekezdés-határok mentén,
+     max 800 token / chunk, ~100 token overlap-pel).
   2. Tokenizáció: heurisztika — átlagos magyar szöveg ~1.4 token / szó.
-     Pontos count csak ha a modell adja vissza (Ollama nem mindig).
-  3. `IEmbedder.EmbedAsync(batch)` — alapmodell `nomic-embed-text:v1.5`
-     (768-dim, magyar elfogadható).
-  4. Insert `DocumentChunk` batch (ON CONFLICT — `(document_id, chunk_index)`
-     UNIQUE → upsert).
+  3. `IEmbedder.EmbedAsync(batch)` — alapmodell `nomic-embed-text:v1.5` (768-dim).
+  4. Upsert a megfelelő chunk-táblába (`(entity_id, chunk_index)` UNIQUE).
 - **Idempotencia újrafuttatáskor:** ha az `embedding_model` változatlan,
   a `chunk_index`-en upsert; ha modellt cserélünk, törlünk minden chunkot
   a régi modellnévre és újra generáljuk.

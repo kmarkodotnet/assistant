@@ -157,7 +157,7 @@ CREATE TYPE app.reminder_status   AS ENUM ('Scheduled','Fired','Acknowledged','S
 CREATE TYPE app.source_kind       AS ENUM ('Upload','GmailAccount','FileWatch');
 CREATE TYPE app.ingest_status     AS ENUM ('Pending','Processed','Skipped','Failed');
 CREATE TYPE app.ai_job_type       AS ENUM ('ExtractText','DetectLanguage','Summarize','ExtractEntities','ExtractDeadlines','ExtractTasks','Classify','Embed');
-CREATE TYPE app.job_target_type   AS ENUM ('Document','Note','EmailMessage');
+CREATE TYPE app.job_target_type   AS ENUM ('Document','Note','EmailMessage','Task','Deadline');
 CREATE TYPE app.job_status        AS ENUM ('Queued','Running','Completed','Failed','Cancelled');
 CREATE TYPE app.audit_action      AS ENUM ('Create','Update','Delete','Login','LoginFailed','Approve','Reject','AiCall','FileAccess','PermissionChange','ExternalApiCall');
 CREATE TYPE app.medical_record_type AS ENUM ('LabResult','Prescription','Vaccination','Imaging','Diagnosis','AppointmentNote','Other');
@@ -595,6 +595,29 @@ CREATE TRIGGER trg_task_set_updated BEFORE UPDATE ON app.task
     FOR EACH ROW EXECUTE FUNCTION app.set_updated_utc();
 ```
 
+### 4.13.1 task_chunk
+
+```sql
+CREATE TABLE app.task_chunk (
+    id                          uuid PRIMARY KEY,
+    task_id                     uuid NOT NULL REFERENCES app.task(id) ON DELETE CASCADE,
+    chunk_index                 int NOT NULL,
+    content                     text NOT NULL,
+    embedding                   vector(768) NULL,
+    embedding_model             varchar(200) NOT NULL DEFAULT '',
+    created_utc                 timestamptz NOT NULL DEFAULT NOW(),
+    CONSTRAINT uix_task_chunk_task_index UNIQUE (task_id, chunk_index)
+);
+CREATE INDEX ix_task_chunk_hnsw
+    ON app.task_chunk USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+```
+
+A chunk tartalom szintetizált szöveg: cím + prioritás + leírás + esedékesség
+(lásd `ai-pipeline.md` 3.9). Az embedding az `EmbedJobRunner` generálja
+minden `Task` Create/Patch után, ill. a `EmbedBackfillService` backfillelje
+az infrastruktúra bevezetése előtt létrehozott rekordokat.
+
 ### 4.14 deadline
 
 ```sql
@@ -622,6 +645,27 @@ CREATE INDEX ix_deadline_responsible   ON app.deadline(responsible_family_member
 CREATE TRIGGER trg_deadline_set_updated BEFORE UPDATE ON app.deadline
     FOR EACH ROW EXECUTE FUNCTION app.set_updated_utc();
 ```
+
+### 4.14.1 deadline_chunk
+
+```sql
+CREATE TABLE app.deadline_chunk (
+    id                          uuid PRIMARY KEY,
+    deadline_id                 uuid NOT NULL REFERENCES app.deadline(id) ON DELETE CASCADE,
+    chunk_index                 int NOT NULL,
+    content                     text NOT NULL,
+    embedding                   vector(768) NULL,
+    embedding_model             varchar(200) NOT NULL DEFAULT '',
+    created_utc                 timestamptz NOT NULL DEFAULT NOW(),
+    CONSTRAINT uix_deadline_chunk_deadline_index UNIQUE (deadline_id, chunk_index)
+);
+CREATE INDEX ix_deadline_chunk_hnsw
+    ON app.deadline_chunk USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+```
+
+A chunk tartalom szintetizált szöveg: cím + kategória + esedékesség + leírás
+(lásd `ai-pipeline.md` 3.9). Trigger-elés és backfill mint a `task_chunk`-nál.
 
 ### 4.15 reminder
 
@@ -998,7 +1042,9 @@ A „kis család, ~6 fő, otthoni PC" feltevésből számolva:
 | `note_chunk` | 1 500 / év | ~7 500 |
 | `email_message` | 2 000 / év (szelektív import) | ~10 000 |
 | `task` | 1 000 / év | ~5 000 |
+| `task_chunk` | 1 000 / év (átlag 1 chunk/task) | ~5 000 |
 | `deadline` | 800 / év | ~4 000 |
+| `deadline_chunk` | 800 / év (átlag 1 chunk/deadline) | ~4 000 |
 | `reminder` | 2 500 / év | ~12 500 |
 | `notification_feed` | ~5 000 / év (90 napos rotációval ~1 250 aktív) | ~25 000 (rotált) |
 | `ai_processing_job` | ~20 000 / év (retry-okkal) | ~100 000 (rotálható) |
