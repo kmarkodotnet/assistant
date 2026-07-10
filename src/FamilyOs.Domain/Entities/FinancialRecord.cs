@@ -34,4 +34,44 @@ public sealed class FinancialRecord
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow,
         };
+
+    public void Patch(
+        FinancialRecordType? recordType,
+        string? vendor,
+        decimal? amount,
+        string? currency,
+        DateOnly? issueDate,
+        DateOnly? dueDate,
+        bool? isPaid,
+        RecurrencePeriod? recurrencePeriod,
+        Guid? relatedFamilyMemberId)
+    {
+        if (recordType.HasValue) RecordType = recordType.Value;
+        Vendor = vendor ?? Vendor;
+        Amount = amount ?? Amount;
+        Currency = currency ?? Currency;
+        IssueDate = issueDate ?? IssueDate;
+        DueDate = dueDate ?? DueDate;
+        if (recurrencePeriod.HasValue) RecurrencePeriod = recurrencePeriod.Value;
+        RelatedFamilyMemberId = relatedFamilyMemberId ?? RelatedFamilyMemberId;
+
+        // ck_financial_paid requires paid_date whenever is_paid = true. AI extraction has no
+        // explicit paid date signal (e.g. a receipt implies "paid on the issue date"), so we
+        // only flip IsPaid on when a usable date exists — never violate the DB constraint.
+        if (isPaid == true)
+        {
+            var effectivePaidDate = PaidDate ?? issueDate ?? IssueDate;
+            if (effectivePaidDate is not null)
+            {
+                IsPaid = true;
+                PaidDate = effectivePaidDate;
+            }
+        }
+        else if (isPaid == false)
+        {
+            IsPaid = false;
+        }
+
+        UpdatedUtc = DateTime.UtcNow;
+    }
 }

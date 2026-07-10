@@ -581,6 +581,9 @@ CREATE TABLE app.task (
     created_utc                     timestamptz NOT NULL DEFAULT now(),
     updated_utc                     timestamptz NOT NULL DEFAULT now(),
     deleted_utc                     timestamptz NULL,
+    tsv                             tsvector
+        GENERATED ALWAYS AS (to_tsvector('hungarian_unaccent',
+            coalesce(title,'') || ' ' || coalesce(description,''))) STORED,
     CONSTRAINT ck_task_title_len    CHECK (char_length(title) BETWEEN 1 AND 200),
     CONSTRAINT ck_task_suggested_origin
         CHECK (status <> 'Suggested' OR origin = 'AiSuggested'),
@@ -591,9 +594,14 @@ CREATE INDEX ix_task_status_due       ON app.task(status, due_date) WHERE delete
 CREATE INDEX ix_task_assigned_open    ON app.task(assigned_to_family_member_id, status)
     WHERE status IN ('Open','InProgress','Suggested') AND deleted_utc IS NULL;
 CREATE INDEX ix_task_suggested        ON app.task(origin) WHERE status = 'Suggested' AND deleted_utc IS NULL;
+CREATE INDEX ix_task_tsv              ON app.task USING gin (tsv);
 CREATE TRIGGER trg_task_set_updated BEFORE UPDATE ON app.task
     FOR EACH ROW EXECUTE FUNCTION app.set_updated_utc();
 ```
+
+A `tsv` oszlopot az EF Core modell **nem** mappolja (a `document_text`
+mintájára — lásd 6.) — kizárólag raw SQL-lel kérdezzük le a
+`ITaskDeadlineFtsSearchService`-ben (`search-strategy.md` 2.2.2).
 
 ### 4.13.1 task_chunk
 
@@ -624,6 +632,7 @@ az infrastruktúra bevezetése előtt létrehozott rekordokat.
 CREATE TABLE app.deadline (
     id                              uuid PRIMARY KEY,
     title                           text NOT NULL,
+    description                     text NULL,
     due_date_utc                    timestamptz NOT NULL,
     is_all_day                      boolean NOT NULL DEFAULT true,
     category                        app.deadline_category NOT NULL DEFAULT 'Other',
@@ -636,15 +645,22 @@ CREATE TABLE app.deadline (
     created_utc                     timestamptz NOT NULL DEFAULT now(),
     updated_utc                     timestamptz NOT NULL DEFAULT now(),
     deleted_utc                     timestamptz NULL,
+    tsv                             tsvector
+        GENERATED ALWAYS AS (to_tsvector('hungarian_unaccent',
+            coalesce(title,'') || ' ' || coalesce(description,''))) STORED,
     CONSTRAINT ck_deadline_title    CHECK (char_length(title) BETWEEN 1 AND 200)
 );
 CREATE INDEX ix_deadline_due           ON app.deadline(due_date_utc, status) WHERE deleted_utc IS NULL;
 CREATE INDEX ix_deadline_category_due  ON app.deadline(category, due_date_utc) WHERE deleted_utc IS NULL;
 CREATE INDEX ix_deadline_responsible   ON app.deadline(responsible_family_member_id, status, due_date_utc)
     WHERE deleted_utc IS NULL;
+CREATE INDEX ix_deadline_tsv           ON app.deadline USING gin (tsv);
 CREATE TRIGGER trg_deadline_set_updated BEFORE UPDATE ON app.deadline
     FOR EACH ROW EXECUTE FUNCTION app.set_updated_utc();
 ```
+
+A `tsv` oszlopot az EF Core modell **nem** mappolja — lásd a `task`-nál (4.13)
+írt indoklást.
 
 ### 4.14.1 deadline_chunk
 

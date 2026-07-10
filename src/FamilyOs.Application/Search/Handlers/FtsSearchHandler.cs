@@ -1,17 +1,18 @@
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Search.Dtos;
 using Microsoft.EntityFrameworkCore;
-using DomainTaskStatus = FamilyOs.Domain.Enums.TaskStatus;
 
 namespace FamilyOs.Application.Search.Handlers;
 
 public sealed class FtsSearchHandler
 {
     private readonly IFamilyOsDbContext _db;
+    private readonly ITaskDeadlineFtsSearchService _taskDeadlineFts;
 
-    public FtsSearchHandler(IFamilyOsDbContext db)
+    public FtsSearchHandler(IFamilyOsDbContext db, ITaskDeadlineFtsSearchService taskDeadlineFts)
     {
         _db = db;
+        _taskDeadlineFts = taskDeadlineFts;
     }
 
     public async Task<SearchResponse> SearchAsync(
@@ -23,8 +24,8 @@ public sealed class FtsSearchHandler
             return new SearchResponse { ModeUsed = SearchMode.Text };
 
         var q = req.Query;
-        // For multi-word queries, also search by the longest significant word as a fallback.
-        // E.g. "áramszámla határideje" → primaryWord = "áramszámla", which matches "áramszámla befizetése".
+        // Document/Note/Reminder still use Contains(); for multi-word queries also search
+        // by the longest significant word as a fallback (Task/Deadline use tsvector instead — see below).
         var tokens = q.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var primaryWord = tokens.Length > 1
             ? (tokens.OrderByDescending(w => w.Length).FirstOrDefault(w => w.Length >= 4) ?? q)
@@ -91,45 +92,29 @@ public sealed class FtsSearchHandler
 
         if (entityTypes.Contains("tasks", StringComparer.OrdinalIgnoreCase))
         {
-            var taskResults = await _db.Tasks
-                .AsNoTracking()
-                .Where(t => !t.IsPrivate || t.CreatedByUserAccountId == userId)
-                .Where(t => t.Status != DomainTaskStatus.Suggested)
-                .Where(t => t.Title.Contains(q) || t.Title.Contains(primaryWord) ||
-                            (t.Description != null && (t.Description.Contains(q) || t.Description.Contains(primaryWord))))
-                .OrderByDescending(t => t.CreatedUtc)
-                .Take(req.PageSize)
-                .Select(t => new { t.Id, t.Title, Snippet = t.Description })
-                .ToListAsync(ct);
+            var taskResults = await _taskDeadlineFts.SearchTasksAsync(q, userId, req.PageSize, suggestedOnly: false, ct);
 
             hits.AddRange(taskResults.Select(t => new SearchHit
             {
                 EntityType = "task",
-                EntityId = t.Id,
+                EntityId = t.EntityId,
                 Title = t.Title,
                 Snippet = t.Snippet != null && t.Snippet.Length > 200 ? t.Snippet[..200] : t.Snippet,
-                Score = 0.6,
+                Score = t.Rank,
             }));
         }
 
         if (entityTypes.Contains("deadlines", StringComparer.OrdinalIgnoreCase))
         {
-            var deadlineResults = await _db.Deadlines
-                .AsNoTracking()
-                .Where(d => !d.IsPrivate || d.CreatedByUserAccountId == userId)
-                .Where(d => d.Title.Contains(q) || d.Title.Contains(primaryWord) ||
-                            (d.Description != null && (d.Description.Contains(q) || d.Description.Contains(primaryWord))))
-                .OrderBy(d => d.DueDateUtc)
-                .Take(req.PageSize)
-                .Select(d => new { d.Id, d.Title, d.DueDateUtc })
-                .ToListAsync(ct);
+            var deadlineResults = await _taskDeadlineFts.SearchDeadlinesAsync(q, userId, req.PageSize, ct);
 
             hits.AddRange(deadlineResults.Select(d => new SearchHit
             {
                 EntityType = "deadline",
-                EntityId = d.Id,
+                EntityId = d.EntityId,
                 Title = d.Title,
-                Score = 0.6,
+                Snippet = d.Snippet != null && d.Snippet.Length > 200 ? d.Snippet[..200] : d.Snippet,
+                Score = d.Rank,
             }));
         }
 
@@ -163,24 +148,15 @@ public sealed class FtsSearchHandler
 
         if (entityTypes.Contains("suggestions", StringComparer.OrdinalIgnoreCase))
         {
-            var suggestionResults = await _db.Tasks
-                .AsNoTracking()
-                .Where(t => !t.IsPrivate || t.CreatedByUserAccountId == userId)
-                .Where(t => t.Status == DomainTaskStatus.Suggested)
-                .Where(t => t.Title.Contains(q) || t.Title.Contains(primaryWord) ||
-                            (t.Description != null && (t.Description.Contains(q) || t.Description.Contains(primaryWord))))
-                .OrderByDescending(t => t.CreatedUtc)
-                .Take(req.PageSize)
-                .Select(t => new { t.Id, t.Title, Snippet = t.Description })
-                .ToListAsync(ct);
+            var suggestionResults = await _taskDeadlineFts.SearchTasksAsync(q, userId, req.PageSize, suggestedOnly: true, ct);
 
             hits.AddRange(suggestionResults.Select(s => new SearchHit
             {
                 EntityType = "suggestion",
-                EntityId = s.Id,
+                EntityId = s.EntityId,
                 Title = s.Title,
                 Snippet = s.Snippet != null && s.Snippet.Length > 200 ? s.Snippet[..200] : s.Snippet,
-                Score = 0.55,
+                Score = s.Rank,
             }));
         }
 

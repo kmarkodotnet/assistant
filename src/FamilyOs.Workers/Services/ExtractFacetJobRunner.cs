@@ -161,16 +161,74 @@ public sealed class ExtractFacetJobRunner
         var extraction = await _financialExtractor.ExtractAsync(text, ct);
         if (extraction is null) return;
 
+        var recordType = ParseFinancialRecordType(extraction.RecordType);
+        var recurrencePeriod = ParseRecurrencePeriod(extraction.RecurrencePeriod);
+
         var existing = await _db.FinancialRecords
             .FirstOrDefaultAsync(r => r.DocumentId == document.Id, ct);
 
         if (existing is null)
         {
-            var record = FinancialRecord.Create(document.Id, FinancialRecordType.Invoice);
+            var record = FinancialRecord.Create(document.Id, recordType);
+            record.Patch(
+                recordType,
+                extraction.Vendor,
+                extraction.Amount,
+                extraction.Currency,
+                extraction.IssueDate,
+                extraction.DueDate,
+                extraction.IsPaid,
+                recurrencePeriod,
+                document.RelatedFamilyMemberId);
             await _db.FinancialRecords.AddAsync(record, ct);
+        }
+        else
+        {
+            existing.Patch(
+                recordType,
+                extraction.Vendor,
+                extraction.Amount,
+                extraction.Currency,
+                extraction.IssueDate,
+                extraction.DueDate,
+                extraction.IsPaid,
+                recurrencePeriod,
+                document.RelatedFamilyMemberId);
         }
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    private static FinancialRecordType ParseFinancialRecordType(string? recordType)
+    {
+        if (string.IsNullOrWhiteSpace(recordType))
+            return FinancialRecordType.Other;
+
+        return recordType.ToLowerInvariant() switch
+        {
+            "invoice" or "szamla" => FinancialRecordType.Invoice,
+            "receipt" or "nyugta" => FinancialRecordType.Receipt,
+            "insurance" or "biztositas" => FinancialRecordType.Insurance,
+            "subscription" or "elofizetes" => FinancialRecordType.Subscription,
+            "bankstatement" or "bankszamlakivonat" => FinancialRecordType.BankStatement,
+            "contract" or "szerzodes" => FinancialRecordType.Contract,
+            _ => FinancialRecordType.Other,
+        };
+    }
+
+    private static RecurrencePeriod? ParseRecurrencePeriod(string? recurrencePeriod)
+    {
+        if (string.IsNullOrWhiteSpace(recurrencePeriod))
+            return null;
+
+        return recurrencePeriod.ToLowerInvariant() switch
+        {
+            "monthly" => RecurrencePeriod.Monthly,
+            "quarterly" => RecurrencePeriod.Quarterly,
+            "yearly" => RecurrencePeriod.Yearly,
+            "none" => RecurrencePeriod.None,
+            _ => null,
+        };
     }
 
     private static MedicalRecordType ParseMedicalRecordType(string? recordType)

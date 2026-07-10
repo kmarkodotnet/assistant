@@ -66,23 +66,15 @@ Vezérlőelvek:
 
 - **Cél:** szabad-szavas kereső dokumentumokban, jegyzetekben, feladatokban
   és határidőkben (klasszikus „kereső doboz").
-- **Implementáció:** EF Core LINQ `.Contains()` alapú szövegkeresés; a
-  document/note entitásoknál `tsvector` index is elérhető (lásd 2.2.1).
-- **Lefedett entitások:** Document (tartalomszöveg + cím), Note (cím + törzs),
-  Task (cím + leírás), Deadline (cím + leírás), Reminder (kapcsolódó
-  Task/Deadline cím + snoozeNote), Suggestion (Suggested státuszú Task-ok).
-- **PrimaryWord fallback:** több szavas lekérdezésnél (pl. „áramszámla
-  határideje") az FTS a teljes kifejezésen kívül a leghosszabb (≥4 karakter)
-  szót is önállóan keresi OR-ral. Így a „áramszámla határideje" keresés
-  megtalálja az „áramszámla befizetése" határidőt is, ahol a teljes phrase
-  nem szerepel.
-  ```csharp
-  var tokens = q.Split(' ', RemoveEmpty | TrimEntries);
-  var primaryWord = tokens.Length > 1
-      ? tokens.OrderByDescending(w => w.Length).FirstOrDefault(w => w.Length >= 4) ?? q
-      : q;
-  // WHERE Title.Contains(q) OR Title.Contains(primaryWord) OR ...
-  ```
+- **Lefedett entitások és implementáció:**
+  - **Document** (tartalomszöveg + cím) — `tsvector` alapú (`document_text.tsv`).
+  - **Note** (cím + törzs) — EF Core LINQ `.Contains()` (kis adatmennyiség
+    mellett elegendő; v2-ben tsvector-ra válthat).
+  - **Task** (nem-Suggested) és **Suggestion** (Suggested státuszú Task) —
+    `tsvector` alapú (`task.tsv`), lásd 2.2.2.
+  - **Deadline** — `tsvector` alapú (`deadline.tsv`), lásd 2.2.2.
+  - **Reminder** (kapcsolódó Task/Deadline cím + snoozeNote) —
+    EF Core LINQ `.Contains()` (join-jellegű lekérdezés, kis tábla).
 - **Document FTS lekérdezés-minta (tsvector alapú):**
   ```sql
   SELECT d.id, d.title, ts_rank(dt.tsv, q) AS rank,
@@ -100,8 +92,56 @@ Vezérlőelvek:
 - **Notes:**
   - `websearch_to_tsquery` támogatja a `"kifejezés"`, `-szó`, `OR` szintaxist.
   - A `ts_headline` adja a UI-snippet-et.
-  - Task és Deadline esetén a `.Contains()` alapú keresés nincs tsvector-ra
-    optimalizálva (kis adatmennyiség mellett elegendő); v2-ben GIN index ide is.
+
+#### 2.2.1 Korábbi megközelítés (levált — dokumentálva a döntés indoklásához)
+
+Task/Deadline/Suggestion FTS korábban EF Core `.Contains()` (`LIKE`) alapú
+volt, tsvector index nélkül. Több szavas lekérdezésnél (pl. „áramszámla
+határideje") ezt egy **PrimaryWord fallback** heurisztikával egészítettük ki
+(a leghosszabb, ≥4 karakteres szó önálló OR-keresése), mert a teljes phrase
+LIKE-egyezés nem talált olyan találatot, ahol csak egy szó egyezik (pl.
+„áramszámla befizetése" határidő cím). Ez működött, de: (1) nem indexelt
+(teljes táblaszkennelés minden keresésnél), (2) nincs ékezet-/tő-kezelés,
+(3) csak EGY szót próbál OR-ral, nem az összeset. Levált — lásd 2.2.2.
+
+#### 2.2.2 Task/Deadline `tsvector` alapú FTS (jelenlegi megközelítés)
+
+A `task` és `deadline` táblák `tsv` generated stored oszlopot kapnak
+(`database-schema.md` 4.13.2, 4.14.2) — ugyanaz a `hungarian_unaccent`
+konfiguráció, mint a Document/Note-nál. A lekérdezés a
+`websearch_to_tsquery`-t **OR-relációval** hívja a szavak között (nem a
+`websearch_to_tsquery` alapértelmezett AND-jával), hogy a régi PrimaryWord
+fallback szemantikáját megőrizze és kiterjessze **minden** szóra, nem csak
+a leghosszabbra:
+
+```csharp
+// "áramszámla határideje" → "áramszámla or határideje" → tsquery: 'aramszamla' | 'hataridej'
+var tokens = query.Split(' ', RemoveEmpty | TrimEntries);
+var tsQueryText = tokens.Length > 1 ? string.Join(" or ", tokens) : query;
+```
+
+```sql
+SELECT t.id, t.title, t.description AS snippet,
+       ts_rank(t.tsv, websearch_to_tsquery('hungarian_unaccent', @q)) AS rank
+FROM   app.task t
+WHERE  t.tsv @@ websearch_to_tsquery('hungarian_unaccent', @q)
+  AND  t.deleted_utc IS NULL
+  AND  t.status <> 'Suggested'   -- Suggestion lekérdezésnél: t.status = 'Suggested'
+  AND  (@userId IS NULL OR t.is_private = false
+        OR t.created_by_user_account_id = @userId::uuid)
+ORDER BY rank DESC
+LIMIT  @limit;
+```
+
+Ugyanez a minta a `deadline` táblára. Ez a réteg indexelt (GIN), tő- és
+ékezet-kezelt, és `ts_rank` szerint rendez (nem létrehozási dátum szerint).
+
+**Architektúra:** az `IFamilyOsDbContext.Database.SqlQueryRaw` az
+Application rétegből nem érhető el (nincs `Microsoft.EntityFrameworkCore.
+Relational` referencia — tudatos réteghatár). A raw SQL ezért egy külön
+`ITaskDeadlineFtsSearchService` absztrakció mögé kerül
+(`Application/Abstractions/Persistence`), Infrastructure-beli
+implementációval — ugyanaz a minta, mint az `ISemanticSearchService`-nél.
 
 ### 2.3 Szemantikus / vektor keresés (pgvector)
 
@@ -113,8 +153,11 @@ Vezérlőelvek:
   - HNSW index `document_chunk`, `note_chunk`, `task_chunk` és
     `deadline_chunk` táblákon, cosine similarity.
 - **Minimum similarity küszöb:**
-  - Standalone szemantikus keresés (`mode=semantic`): **0.50** — alacsony
-    relevancia-pontszámú (triviálisan tárgyatlan) találatok kiszűrésére.
+  - Standalone szemantikus keresés (`mode=semantic`): **0.60** — a korábbi
+    0.50 még átengedett triviálisan tárgyatlan találatokat (pl. „áramszámla"
+    keresésre egészségügyi dokumentumot); a 0.60 tapasztalati úton szűkebb,
+    de még nem vág el valódi releváns találatot a `nomic-embed-text`
+    modell cosine-similarity eloszlásán.
   - Hibrid / Q&A kontextus-gyűjtés (`mode=auto`, `mode=qa`): **0.20** —
     szélesebb hálóval dolgozik, az RRF-fusion úgyis rendet rak.
 - **Lekérdezés-minta:**

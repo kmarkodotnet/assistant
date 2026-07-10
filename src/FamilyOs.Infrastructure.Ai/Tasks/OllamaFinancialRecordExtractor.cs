@@ -55,27 +55,35 @@ public sealed class OllamaFinancialRecordExtractor : IFinancialRecordExtractor
             if (root.TryGetProperty("amount", out var amEl) && amEl.ValueKind == JsonValueKind.Number)
                 amount = amEl.GetDecimal();
 
-            var currency = root.TryGetProperty("currency", out var cur) ? cur.GetString() : null;
-            var recordDateStr = root.TryGetProperty("recordDate", out var rd) ? rd.GetString() : null;
-            var isPaid = root.TryGetProperty("isPaid", out var ip) && ip.ValueKind == JsonValueKind.True;
-            var recurrencePeriod = root.TryGetProperty("recurrencePeriod", out var rp) ? rp.GetString() : null;
-            var notes = root.TryGetProperty("notes", out var n) ? n.GetString() : null;
+            var recordType = NullIfLiteralNull(root.TryGetProperty("recordType", out var rt) ? rt.GetString() : null);
+            var vendor = NullIfLiteralNull(root.TryGetProperty("vendor", out var v) ? v.GetString() : null);
+            var currency = NullIfLiteralNull(root.TryGetProperty("currency", out var cur) ? cur.GetString() : null);
+            var recurrencePeriod = NullIfLiteralNull(root.TryGetProperty("recurrencePeriod", out var rp) ? rp.GetString() : null);
 
-            DateOnly? recordDate = null;
-            if (!string.IsNullOrWhiteSpace(recordDateStr) && recordDateStr != "null")
-            {
-                if (DateOnly.TryParseExact(recordDateStr, "yyyy-MM-dd", out var parsed))
-                    recordDate = parsed;
-            }
+            bool? isPaid = root.TryGetProperty("isPaid", out var ip) && ip.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? ip.GetBoolean()
+                : null;
 
-            if (recurrencePeriod is "null" or "")
-                recurrencePeriod = null;
+            var issueDate = ParseDate(root, "issueDate");
+            var dueDate = ParseDate(root, "dueDate");
 
-            return new FinancialRecordExtraction(amount, currency, recordDate, isPaid, recurrencePeriod, notes);
+            return new FinancialRecordExtraction(recordType, vendor, amount, currency, issueDate, dueDate, isPaid, recurrencePeriod);
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    private static DateOnly? ParseDate(JsonElement root, string propertyName)
+    {
+        var raw = root.TryGetProperty(propertyName, out var el) ? el.GetString() : null;
+        if (string.IsNullOrWhiteSpace(raw) || raw == "null")
+            return null;
+
+        return DateOnly.TryParseExact(raw, "yyyy-MM-dd", out var parsed) ? parsed : null;
+    }
+
+    private static string? NullIfLiteralNull(string? value)
+        => value is null or "null" or "" ? null : value;
 }

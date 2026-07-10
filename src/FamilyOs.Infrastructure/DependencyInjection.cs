@@ -18,6 +18,7 @@ using FamilyOs.Infrastructure.Markdown;
 using FamilyOs.Infrastructure.Notifications;
 using FamilyOs.Infrastructure.Persistence;
 using FamilyOs.Infrastructure.Persistence.Repositories;
+using FamilyOs.Infrastructure.Persistence.Search;
 using FamilyOs.Infrastructure.Persistence.Seed;
 using FamilyOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -118,6 +119,9 @@ public static class DependencyInjection
 
         // AI job repository
         services.AddScoped<IAiProcessingJobRepository, AiProcessingJobRepository>();
+
+        // Structured (tsvector) FTS for Task/Deadline
+        services.AddScoped<ITaskDeadlineFtsSearchService, TaskDeadlineFtsSearchService>();
 
         // Notifications
         services.Configure<SmtpOptions>(configuration.GetSection("Notifications:Smtp"));

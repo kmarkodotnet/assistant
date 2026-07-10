@@ -1,0 +1,14 @@
+Kerd le a penzugyi informaciokat az alabbi dokumentumbol.
+
+Dokumentum:
+{{document}}
+
+A "recordType" mezo erteke pontosan az alabbi listabol valaszthato:
+"Invoice", "Receipt", "Insurance", "Subscription", "BankStatement", "Contract", "Other".
+
+A "vendor" a szolgaltato/kibocsato neve (pl. "MVM", "AXA"), null ha nem allapithato meg.
+Az "issueDate" a szamla/dokumentum kiallitasi datuma, a "dueDate" a fizetesi hatarido.
+Az "isPaid" true, ha a dokumentum kifejezetten jelzi, hogy mar ki van fizetve (pl. "PAID" belyegzo, nyugta).
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"recordType": "Invoice|Receipt|Insurance|Subscription|BankStatement|Contract|Other|null", "vendor": "...|null", "amount": 0.0, "currency": "HUF", "issueDate": "YYYY-MM-DD|null", "dueDate": "YYYY-MM-DD|null", "isPaid": false, "recurrencePeriod": "None|Monthly|Quarterly|Yearly|null"}

@@ -1,6 +1,14 @@
 namespace FamilyOs.Application.Abstractions.Ai;
 
-public record FinancialRecordExtraction(decimal? Amount, string? Currency, DateOnly? RecordDate, bool IsPaid, string? RecurrencePeriod, string? Notes);
+public record FinancialRecordExtraction(
+    string? RecordType,
+    string? Vendor,
+    decimal? Amount,
+    string? Currency,
+    DateOnly? IssueDate,
+    DateOnly? DueDate,
+    bool? IsPaid,
+    string? RecurrencePeriod);
 
 public interface IFinancialRecordExtractor
 {
