@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, signal, inject } from '@angular/core';
 import { DatePipe, SlicePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { switchMap, catchError, of, tap } from 'rxjs';
@@ -9,6 +10,20 @@ import { ButtonComponent } from '../../../shared/ui/button.component';
 import { SkeletonComponent } from '../../../shared/ui/skeleton.component';
 import { NotificationService } from '../../../core/notifications/notification.service';
 
+function entityRouterLink(entityType: string | null | undefined, entityId: string | null | undefined): string[] | null {
+  if (!entityType || !entityId) return null;
+  const t = entityType.toLowerCase();
+  if (t.includes('document'))    return ['/documents', entityId];
+  if (t.includes('note'))        return ['/notes'];
+  if (t.includes('task'))        return ['/tasks'];
+  if (t.includes('deadline'))    return ['/deadlines'];
+  if (t.includes('reminder'))    return ['/reminders'];
+  if (t.includes('suggestion'))  return ['/suggestions'];
+  if (t.includes('familymember')) return ['/family'];
+  if (t.includes('source'))      return ['/settings'];
+  return null;
+}
+
 const ACTIONS = [
   '', 'Create', 'Update', 'Delete', 'Login', 'LoginFailed',
   'Approve', 'Reject', 'AiCall', 'FileAccess', 'PermissionChange', 'ExternalApiCall',
@@ -17,7 +32,7 @@ const ACTIONS = [
 @Component({
   selector: 'app-audit-log-page',
   standalone: true,
-  imports: [DatePipe, SlicePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent],
+  imports: [DatePipe, SlicePipe, FormsModule, TranslateModule, ButtonComponent, SkeletonComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="max-w-7xl mx-auto">
@@ -110,8 +125,22 @@ const ACTIONS = [
                       {{ item.userAccountId ? (item.userAccountId | slice:0:8) + '…' : '—' }}
                     </td>
                     <td class="px-4 py-3 text-xs">{{ item.entityType ?? '—' }}</td>
-                    <td class="px-4 py-3 text-xs font-mono text-[var(--color-text-muted)]">
-                      {{ item.entityId ? (item.entityId | slice:0:8) + '…' : '—' }}
+                    <td class="px-4 py-3 text-xs font-mono">
+                      @if (item.entityId) {
+                        @if (entityLink(item.entityType, item.entityId); as link) {
+                          <a [routerLink]="link"
+                             class="text-primary-600 hover:text-primary-800 hover:underline transition-colors"
+                             title="{{ item.entityId }}">
+                            {{ item.entityId | slice:0:8 }}…
+                          </a>
+                        } @else {
+                          <span class="text-[var(--color-text-muted)]" title="{{ item.entityId }}">
+                            {{ item.entityId | slice:0:8 }}…
+                          </span>
+                        }
+                      } @else {
+                        <span class="text-[var(--color-text-muted)]">—</span>
+                      }
                     </td>
                     <td class="px-4 py-3 text-xs">
                       @if (item.detailsJson) {
@@ -230,5 +259,9 @@ export class AuditLogPage {
   exportCsv(): void {
     const url = this.api.exportUrl(this.filterFrom || undefined, this.filterTo || undefined, 'csv');
     window.open(url, '_blank');
+  }
+
+  entityLink(entityType: string | null | undefined, entityId: string | null | undefined): string[] | null {
+    return entityRouterLink(entityType, entityId);
   }
 }

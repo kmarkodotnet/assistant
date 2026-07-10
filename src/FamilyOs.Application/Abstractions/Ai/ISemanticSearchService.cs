@@ -8,6 +8,6 @@ public interface ISemanticSearchService
         float[] queryEmbedding,
         int limit,
         Guid? userId,
-        CancellationToken ct = default,
-        double minSimilarity = 0.0);
+        double minSimilarity = 0.0,
+        CancellationToken ct = default);
 }

@@ -4,6 +4,7 @@ import {
   input,
   computed,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { BadgeComponent } from '../../../shared/ui/badge.component';
 import { AnswerSourcesComponent } from './answer-sources.component';
 import type { SearchResponse, SearchHit } from '../models/search.dto';
@@ -42,7 +43,7 @@ function truncate(text: string, max: number): string {
 @Component({
   selector: 'app-chat-answer-message',
   standalone: true,
-  imports: [BadgeComponent, AnswerSourcesComponent],
+  imports: [BadgeComponent, AnswerSourcesComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex justify-start mb-3">
@@ -88,18 +89,23 @@ function truncate(text: string, max: number): string {
           @if (visibleHits().length > 0) {
             <div class="space-y-2">
               @for (hit of visibleHits(); track hit.entityId) {
-                <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+                <a
+                  [routerLink]="entityRouterLink(hit)"
+                  class="block rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3 hover:border-primary-400 hover:bg-primary-50/30 transition-colors cursor-pointer"
+                >
                   <div class="flex items-center gap-2 mb-1 flex-wrap">
                     <ui-badge [variant]="badgeVariant(hit)">{{ entityTypeLabel(hit) }}</ui-badge>
                     <span class="text-sm font-medium leading-snug flex-1">{{ hit.title }}</span>
-                    <span class="text-xs text-[var(--color-text-muted)] shrink-0">{{ hit.score.toFixed(2) }}</span>
+                    <svg class="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    </svg>
                   </div>
                   @if (hit.snippet) {
                     <p class="text-xs text-[var(--color-text-muted)] leading-relaxed">
                       {{ snippetText(hit) }}
                     </p>
                   }
-                </div>
+                </a>
               }
             </div>
 
@@ -152,5 +158,17 @@ export class ChatAnswerMessageComponent {
 
   snippetText(hit: SearchHit): string {
     return hit.snippet ? truncate(hit.snippet, 150) : '';
+  }
+
+  entityRouterLink(hit: SearchHit): string[] {
+    switch (hit.entityType.toLowerCase()) {
+      case 'document':   return ['/documents', hit.entityId];
+      case 'note':       return ['/notes'];
+      case 'task':       return ['/tasks'];
+      case 'deadline':   return ['/deadlines'];
+      case 'reminder':   return ['/reminders'];
+      case 'suggestion': return ['/suggestions'];
+      default:           return ['/'];
+    }
   }
 }

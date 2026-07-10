@@ -39,7 +39,7 @@ public sealed class SemanticSearchHandler
         {
             return new SearchResponse { ModeUsed = SearchMode.Semantic };
         }
-        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct, minSimilarity: 0.30);
+        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, minSimilarity: 0.30, ct);
 
         // Group by (EntityType, EntityId), take best score per entity
         var byEntity = semanticHits
