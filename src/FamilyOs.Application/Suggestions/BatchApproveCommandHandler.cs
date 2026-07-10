@@ -34,6 +34,12 @@ public sealed class BatchApproveCommandHandler : IRequestHandler<BatchApproveCom
                     case "deadline":
                         await ProcessDeadlineAsync(item, request.ApprovedByUserId, cancellationToken);
                         break;
+                    case "tag":
+                        await ProcessTagAsync(item, cancellationToken);
+                        break;
+                    case "topic":
+                        await ProcessTopicAsync(item, cancellationToken);
+                        break;
                     default:
                         result.Errors.Add($"Ismeretlen entityType: {item.EntityType} (id={item.Id})");
                         continue;
@@ -85,5 +91,31 @@ public sealed class BatchApproveCommandHandler : IRequestHandler<BatchApproveCom
         {
             DeadlineStateMachine.Transition(deadline, DomainDeadlineStatus.Dismissed);
         }
+    }
+
+    private async Task ProcessTagAsync(BatchApproveItem item, CancellationToken ct)
+    {
+        var tagId = item.SecondaryId ?? throw new InvalidOperationException("TagId hiányzik");
+        var docTag = await _db.DocumentTags
+            .FirstOrDefaultAsync(dt => dt.DocumentId == item.Id && dt.TagId == tagId, ct)
+            ?? throw new InvalidOperationException($"DocumentTag nem található: doc={item.Id}, tag={tagId}");
+
+        if (item.Action.Equals("approve", StringComparison.OrdinalIgnoreCase))
+            docTag.IsApproved = true;
+        else
+            _db.DocumentTags.Remove(docTag);
+    }
+
+    private async Task ProcessTopicAsync(BatchApproveItem item, CancellationToken ct)
+    {
+        var topicId = item.SecondaryId ?? throw new InvalidOperationException("TopicId hiányzik");
+        var docTopic = await _db.DocumentTopics
+            .FirstOrDefaultAsync(dt => dt.DocumentId == item.Id && dt.TopicId == topicId, ct)
+            ?? throw new InvalidOperationException($"DocumentTopic nem található: doc={item.Id}, topic={topicId}");
+
+        if (item.Action.Equals("approve", StringComparison.OrdinalIgnoreCase))
+            docTopic.IsApproved = true;
+        else
+            _db.DocumentTopics.Remove(docTopic);
     }
 }

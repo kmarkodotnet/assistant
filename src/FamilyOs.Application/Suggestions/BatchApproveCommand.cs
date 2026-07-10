@@ -2,7 +2,7 @@ using MediatR;
 
 namespace FamilyOs.Application.Suggestions;
 
-public sealed record BatchApproveItem(string EntityType, Guid Id, string Action);
+public sealed record BatchApproveItem(string EntityType, Guid Id, string Action, Guid? SecondaryId = null);
 
 public sealed record BatchApproveCommand(
     IReadOnlyList<BatchApproveItem> Items,

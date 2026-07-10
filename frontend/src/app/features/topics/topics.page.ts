@@ -5,6 +5,28 @@ import { SkeletonComponent } from '../../shared/ui/skeleton.component';
 import { NotificationService } from '../../core/notifications/notification.service';
 import { isAdmin } from '../../core/auth/auth.store';
 
+const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
+  { label: 'Dokumentum', emojis: ['📄','📃','📋','📁','📂','🗂️','📑','📊','📈','📉','📝','🗒️','🗓️'] },
+  { label: 'Élet & Egészség', emojis: ['🏥','💊','🩺','🩻','❤️','🧬','👶','👨‍👩‍👧','🦷','🧠','💉','🩹'] },
+  { label: 'Pénzügy', emojis: ['💰','💳','🏦','📊','💵','🧾','💸','📈','🏠','🚗','⚖️'] },
+  { label: 'Jog & Hivatal', emojis: ['⚖️','🏛️','📜','🖊️','🔏','🔑','🪪','📮','🗳️','🏷️'] },
+  { label: 'Oktatás', emojis: ['🎓','📚','📖','✏️','🏫','🎒','🖊️','📐','🔬','🏆'] },
+  { label: 'Otthon & Ingatlan', emojis: ['🏠','🏡','🏗️','🔧','🛠️','🪟','🚪','💡','🌿','🛋️'] },
+  { label: 'Munka', emojis: ['💼','🖥️','📞','✉️','🤝','📋','🏢','⏰','🗃️','📌'] },
+  { label: 'Egyéb', emojis: ['⭐','📌','🔖','🏷️','✅','❗','🔔','📍','🎯','🔍','ℹ️'] },
+];
+
+function toSlug(name: string): string {
+  const map: Record<string, string> = {
+    á:'a',é:'e',í:'i',ó:'o',ö:'o',ő:'o',ú:'u',ü:'u',ű:'u',
+    Á:'a',É:'e',Í:'i',Ó:'o',Ö:'o',Ő:'o',Ú:'u',Ü:'u',Ű:'u',
+  };
+  return name.toLowerCase()
+    .replace(/[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/g, c => map[c] ?? c)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 interface FlatTopic extends TopicDto {
   depth: number;
 }
@@ -75,33 +97,71 @@ function flattenTopics(topics: TopicDto[], depth = 0): FlatTopic[] {
 
       @if (dialogOpen()) {
         <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" (click)="closeDialog()">
-          <div class="bg-[var(--color-surface)] rounded-xl p-6 w-full max-w-md shadow-xl" (click)="$event.stopPropagation()">
-            <h2 class="text-lg font-semibold mb-4">{{ editId() ? 'Téma szerkesztése' : 'Új téma' }}</h2>
-            <div class="space-y-3">
+          <div class="bg-[var(--color-surface)] rounded-xl w-full max-w-md shadow-xl flex flex-col max-h-[90vh]" (click)="$event.stopPropagation()">
+            <div class="px-6 pt-6 pb-4 border-b border-[var(--color-border)]">
+              <h2 class="text-lg font-semibold">{{ editId() ? 'Téma szerkesztése' : 'Új téma' }}</h2>
+            </div>
+            <div class="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+
+              <!-- Név -->
               <div>
                 <label class="block text-sm font-medium mb-1">Név *</label>
                 <input type="text" [value]="formName()"
-                  (input)="formName.set($any($event.target).value)"
+                  (input)="onNameInput($any($event.target).value)"
                   class="w-full border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm" />
               </div>
+
+              <!-- Slug (csak létrehozáskor) -->
               @if (!editId()) {
                 <div>
-                  <label class="block text-sm font-medium mb-1">Slug *</label>
+                  <label class="block text-sm font-medium mb-1">
+                    URL-azonosító (slug)
+                    <span class="text-xs font-normal text-[var(--color-text-muted)] ml-1">— automatikusan generálódik</span>
+                  </label>
                   <input type="text" [value]="formSlug()"
-                    (input)="formSlug.set($any($event.target).value)"
-                    placeholder="pl. egeszsegugy"
+                    (input)="formSlug.set($any($event.target).value); slugManual.set(true)"
                     class="w-full border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm font-mono" />
+                  <p class="text-xs text-[var(--color-text-muted)] mt-1">
+                    Egyedi belső azonosító, kisbetűs, ékezet nélkül, kötőjelekkel.
+                    A dokumentumlistában szűrésre és hivatkozásra használja a rendszer.
+                  </p>
                 </div>
               }
+
+              <!-- Ikon picker -->
               <div>
-                <label class="block text-sm font-medium mb-1">Ikon (emoji)</label>
-                <input type="text" [value]="formIcon()"
-                  (input)="formIcon.set($any($event.target).value)"
-                  placeholder="pl. 🏥"
-                  class="w-full border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm" />
+                <label class="block text-sm font-medium mb-1">Ikon</label>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl w-10 h-10 flex items-center justify-center border border-[var(--color-border)] rounded-lg">
+                    {{ formIcon() || '—' }}
+                  </span>
+                  @if (formIcon()) {
+                    <button (click)="formIcon.set('')"
+                      class="text-xs text-[var(--color-text-muted)] hover:text-danger-600">Törlés</button>
+                  }
+                </div>
+                <div class="border border-[var(--color-border)] rounded-lg overflow-hidden">
+                  @for (group of emojiGroups; track group.label) {
+                    <div class="px-3 pt-2 pb-1">
+                      <p class="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-1">{{ group.label }}</p>
+                      <div class="flex flex-wrap gap-0.5">
+                        @for (emoji of group.emojis; track emoji) {
+                          <button type="button"
+                            (click)="formIcon.set(emoji)"
+                            [class.ring-2]="formIcon() === emoji"
+                            [class.ring-primary-500]="formIcon() === emoji"
+                            class="w-8 h-8 text-lg rounded hover:bg-[var(--color-surface-hover)] flex items-center justify-center transition-colors">
+                            {{ emoji }}
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
+
             </div>
-            <div class="flex gap-2 justify-end mt-5">
+            <div class="flex gap-2 justify-end px-6 py-4 border-t border-[var(--color-border)]">
               <button (click)="closeDialog()"
                 class="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-hover)]">
                 Mégsem
@@ -122,6 +182,7 @@ export class TopicsPage implements OnInit {
   private notificationService = inject(NotificationService);
 
   readonly isAdmin = isAdmin;
+  readonly emojiGroups = EMOJI_GROUPS;
 
   loading = signal(true);
   error = signal(false);
@@ -134,6 +195,7 @@ export class TopicsPage implements OnInit {
   formName = signal('');
   formSlug = signal('');
   formIcon = signal('');
+  slugManual = signal(false);
 
   async ngOnInit(): Promise<void> {
     await this.loadTopics();
@@ -153,12 +215,20 @@ export class TopicsPage implements OnInit {
     }
   }
 
+  onNameInput(value: string): void {
+    this.formName.set(value);
+    if (!this.slugManual()) {
+      this.formSlug.set(toSlug(value));
+    }
+  }
+
   openCreateDialog(parentId: string | null): void {
     this.editId.set(null);
     this.parentId.set(parentId);
     this.formName.set('');
     this.formSlug.set('');
     this.formIcon.set('');
+    this.slugManual.set(false);
     this.dialogOpen.set(true);
   }
 
