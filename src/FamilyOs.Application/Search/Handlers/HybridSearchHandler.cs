@@ -51,7 +51,8 @@ public sealed class HybridSearchHandler
         var embedding = await embeddingTask;
         var ftsResponse = await ftsTask;
 
-        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct);
+        // Lower threshold for Q&A context gathering; hits will be filtered further by RRF score.
+        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct, minSimilarity: 0.20);
 
         // Build entity type map (semantic hits take precedence for type resolution)
         var entityTypeMap = new Dictionary<Guid, string>();

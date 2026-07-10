@@ -21,7 +21,8 @@ public sealed class SemanticSearchService : ISemanticSearchService
         float[] queryEmbedding,
         int limit,
         Guid? userId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        double minSimilarity = 0.0)
     {
         var vector = new Vector(queryEmbedding);
         var modelName = _embedder.ModelName;
@@ -52,6 +53,7 @@ public sealed class SemanticSearchService : ISemanticSearchService
                   AND n.deleted_utc IS NULL
                   AND (@userId IS NULL OR n.is_private = false OR n.created_by_user_account_id = @userId::uuid)
             ) combined
+            WHERE score >= @minSimilarity
             ORDER BY score DESC
             LIMIT @limit";
 
@@ -61,6 +63,7 @@ public sealed class SemanticSearchService : ISemanticSearchService
                 new Npgsql.NpgsqlParameter("@vector", vector),
                 new Npgsql.NpgsqlParameter("@model", modelName),
                 new Npgsql.NpgsqlParameter("@userId", (object?)userId?.ToString() ?? DBNull.Value),
+                new Npgsql.NpgsqlParameter("@minSimilarity", minSimilarity),
                 new Npgsql.NpgsqlParameter("@limit", limit))
             .ToListAsync(ct);
 
