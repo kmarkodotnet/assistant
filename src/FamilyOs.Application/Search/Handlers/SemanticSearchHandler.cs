@@ -39,7 +39,7 @@ public sealed class SemanticSearchHandler
         {
             return new SearchResponse { ModeUsed = SearchMode.Semantic };
         }
-        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, minSimilarity: 0.30, ct);
+        var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, minSimilarity: 0.50, ct);
 
         // Group by (EntityType, EntityId), take best score per entity
         var byEntity = semanticHits
@@ -53,6 +53,8 @@ public sealed class SemanticSearchHandler
         // Fetch titles from each entity type
         var docIds = byEntity.Where(h => h.EntityType == "document").Select(h => h.EntityId).ToList();
         var noteIds = byEntity.Where(h => h.EntityType == "note").Select(h => h.EntityId).ToList();
+        var taskIds = byEntity.Where(h => h.EntityType == "task").Select(h => h.EntityId).ToList();
+        var deadlineIds = byEntity.Where(h => h.EntityType == "deadline").Select(h => h.EntityId).ToList();
 
         var docTitles = docIds.Count > 0
             ? await _db.Documents.AsNoTracking()
@@ -68,11 +70,29 @@ public sealed class SemanticSearchHandler
                 .ToDictionaryAsync(n => n.Id, n => n.Title, ct)
             : new Dictionary<Guid, string>();
 
+        var taskTitles = taskIds.Count > 0
+            ? await _db.Tasks.AsNoTracking()
+                .Where(t => taskIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Title })
+                .ToDictionaryAsync(t => t.Id, t => t.Title, ct)
+            : new Dictionary<Guid, string>();
+
+        var deadlineTitles = deadlineIds.Count > 0
+            ? await _db.Deadlines.AsNoTracking()
+                .Where(d => deadlineIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Title })
+                .ToDictionaryAsync(d => d.Id, d => d.Title, ct)
+            : new Dictionary<Guid, string>();
+
         var hits = byEntity.Select(h =>
         {
-            var title = h.EntityType == "note"
-                ? noteTitles.GetValueOrDefault(h.EntityId, string.Empty)
-                : docTitles.GetValueOrDefault(h.EntityId, string.Empty);
+            var title = h.EntityType switch
+            {
+                "note" => noteTitles.GetValueOrDefault(h.EntityId, string.Empty),
+                "task" => taskTitles.GetValueOrDefault(h.EntityId, string.Empty),
+                "deadline" => deadlineTitles.GetValueOrDefault(h.EntityId, string.Empty),
+                _ => docTitles.GetValueOrDefault(h.EntityId, string.Empty),
+            };
 
             return new SearchHit
             {

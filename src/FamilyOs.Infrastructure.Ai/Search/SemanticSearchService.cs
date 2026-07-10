@@ -52,6 +52,30 @@ public sealed class SemanticSearchService : ISemanticSearchService
                   AND nc.embedding_model = @model
                   AND n.deleted_utc IS NULL
                   AND (@userId IS NULL OR n.is_private = false OR n.created_by_user_account_id = @userId::uuid)
+                UNION ALL
+                SELECT 'task' as entity_type,
+                       tc.task_id as entity_id,
+                       tc.id as chunk_id,
+                       tc.content as snippet,
+                       1 - (tc.embedding <=> @vector) as score
+                FROM app.task_chunk tc
+                JOIN app.task t ON t.id = tc.task_id
+                WHERE tc.embedding IS NOT NULL
+                  AND tc.embedding_model = @model
+                  AND t.deleted_utc IS NULL
+                  AND (@userId IS NULL OR t.is_private = false OR t.created_by_user_account_id = @userId::uuid)
+                UNION ALL
+                SELECT 'deadline' as entity_type,
+                       dc2.deadline_id as entity_id,
+                       dc2.id as chunk_id,
+                       dc2.content as snippet,
+                       1 - (dc2.embedding <=> @vector) as score
+                FROM app.deadline_chunk dc2
+                JOIN app.deadline d2 ON d2.id = dc2.deadline_id
+                WHERE dc2.embedding IS NOT NULL
+                  AND dc2.embedding_model = @model
+                  AND d2.deleted_utc IS NULL
+                  AND (@userId IS NULL OR d2.is_private = false OR d2.created_by_user_account_id = @userId::uuid)
             ) combined
             WHERE score >= @minSimilarity
             ORDER BY score DESC

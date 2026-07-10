@@ -34,6 +34,8 @@ public sealed class FamilyOsDbContext : DbContext, IFamilyOsDbContext
     public DbSet<NotificationFeed> NotificationFeed => Set<NotificationFeed>();
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<NoteChunk> NoteChunks => Set<NoteChunk>();
+    public DbSet<TaskChunk> TaskChunks => Set<TaskChunk>();
+    public DbSet<DeadlineChunk> DeadlineChunks => Set<DeadlineChunk>();
     public DbSet<NoteTag> NoteTags => Set<NoteTag>();
     public DbSet<NoteTopic> NoteTopics => Set<NoteTopic>();
     public DbSet<Source> Sources => Set<Source>();

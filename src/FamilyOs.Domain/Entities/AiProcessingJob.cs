@@ -95,4 +95,32 @@ public sealed class AiProcessingJob
         CreatedUtc = DateTime.UtcNow,
         UpdatedUtc = DateTime.UtcNow,
     };
+
+    public static AiProcessingJob CreateForTask(AiJobType jobType, Guid taskId) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        JobType = jobType,
+        TargetType = JobTargetType.Task,
+        TargetId = taskId,
+        Status = JobStatus.Queued,
+        Attempt = 0,
+        MaxAttempts = 5,
+        NextAttemptUtc = DateTime.UtcNow,
+        CreatedUtc = DateTime.UtcNow,
+        UpdatedUtc = DateTime.UtcNow,
+    };
+
+    public static AiProcessingJob CreateForDeadline(AiJobType jobType, Guid deadlineId) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        JobType = jobType,
+        TargetType = JobTargetType.Deadline,
+        TargetId = deadlineId,
+        Status = JobStatus.Queued,
+        Attempt = 0,
+        MaxAttempts = 5,
+        NextAttemptUtc = DateTime.UtcNow,
+        CreatedUtc = DateTime.UtcNow,
+        UpdatedUtc = DateTime.UtcNow,
+    };
 }

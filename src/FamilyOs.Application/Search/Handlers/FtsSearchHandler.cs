@@ -23,6 +23,12 @@ public sealed class FtsSearchHandler
             return new SearchResponse { ModeUsed = SearchMode.Text };
 
         var q = req.Query;
+        // For multi-word queries, also search by the longest significant word as a fallback.
+        // E.g. "áramszámla határideje" → primaryWord = "áramszámla", which matches "áramszámla befizetése".
+        var tokens = q.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var primaryWord = tokens.Length > 1
+            ? (tokens.OrderByDescending(w => w.Length).FirstOrDefault(w => w.Length >= 4) ?? q)
+            : q;
         var entityTypes = req.EntityTypes ?? ["documents", "tasks", "deadlines", "notes", "reminders", "suggestions"];
         var hits = new List<SearchHit>();
 
@@ -31,8 +37,8 @@ public sealed class FtsSearchHandler
             var docResults = await _db.DocumentTexts
                 .AsNoTracking()
                 .Where(dt =>
-                    dt.Content.Contains(q) ||
-                    dt.Document!.Title.Contains(q))
+                    dt.Content.Contains(q) || dt.Content.Contains(primaryWord) ||
+                    dt.Document!.Title.Contains(q) || dt.Document!.Title.Contains(primaryWord))
                 .Where(dt =>
                     !dt.Document!.IsPrivate || dt.Document.CreatedByUserAccountId == userId)
                 .OrderByDescending(dt => dt.Document!.CreatedUtc)
@@ -60,7 +66,8 @@ public sealed class FtsSearchHandler
         {
             var noteResults = await _db.Notes
                 .AsNoTracking()
-                .Where(n => n.Title.Contains(q) || n.Body.Contains(q))
+                .Where(n => n.Title.Contains(q) || n.Title.Contains(primaryWord) ||
+                            n.Body.Contains(q) || n.Body.Contains(primaryWord))
                 .Where(n => !n.IsPrivate || n.CreatedByUserAccountId == userId)
                 .OrderByDescending(n => n.UpdatedUtc)
                 .Take(req.PageSize)
@@ -88,7 +95,8 @@ public sealed class FtsSearchHandler
                 .AsNoTracking()
                 .Where(t => !t.IsPrivate || t.CreatedByUserAccountId == userId)
                 .Where(t => t.Status != DomainTaskStatus.Suggested)
-                .Where(t => t.Title.Contains(q) || (t.Description != null && t.Description.Contains(q)))
+                .Where(t => t.Title.Contains(q) || t.Title.Contains(primaryWord) ||
+                            (t.Description != null && (t.Description.Contains(q) || t.Description.Contains(primaryWord))))
                 .OrderByDescending(t => t.CreatedUtc)
                 .Take(req.PageSize)
                 .Select(t => new { t.Id, t.Title, Snippet = t.Description })
@@ -109,7 +117,8 @@ public sealed class FtsSearchHandler
             var deadlineResults = await _db.Deadlines
                 .AsNoTracking()
                 .Where(d => !d.IsPrivate || d.CreatedByUserAccountId == userId)
-                .Where(d => d.Title.Contains(q) || (d.Description != null && d.Description.Contains(q)))
+                .Where(d => d.Title.Contains(q) || d.Title.Contains(primaryWord) ||
+                            (d.Description != null && (d.Description.Contains(q) || d.Description.Contains(primaryWord))))
                 .OrderBy(d => d.DueDateUtc)
                 .Take(req.PageSize)
                 .Select(d => new { d.Id, d.Title, d.DueDateUtc })
@@ -130,9 +139,9 @@ public sealed class FtsSearchHandler
                 .AsNoTracking()
                 .Where(r => r.TargetUserAccountId == userId || r.CreatedByUserAccountId == userId)
                 .Where(r =>
-                    (r.Task != null && r.Task.Title.Contains(q)) ||
-                    (r.Deadline != null && r.Deadline.Title.Contains(q)) ||
-                    (r.SnoozeNote != null && r.SnoozeNote.Contains(q)))
+                    (r.Task != null && (r.Task.Title.Contains(q) || r.Task.Title.Contains(primaryWord))) ||
+                    (r.Deadline != null && (r.Deadline.Title.Contains(q) || r.Deadline.Title.Contains(primaryWord))) ||
+                    (r.SnoozeNote != null && (r.SnoozeNote.Contains(q) || r.SnoozeNote.Contains(primaryWord))))
                 .OrderBy(r => r.TriggerUtc)
                 .Take(req.PageSize)
                 .Select(r => new
@@ -158,7 +167,8 @@ public sealed class FtsSearchHandler
                 .AsNoTracking()
                 .Where(t => !t.IsPrivate || t.CreatedByUserAccountId == userId)
                 .Where(t => t.Status == DomainTaskStatus.Suggested)
-                .Where(t => t.Title.Contains(q) || (t.Description != null && t.Description.Contains(q)))
+                .Where(t => t.Title.Contains(q) || t.Title.Contains(primaryWord) ||
+                            (t.Description != null && (t.Description.Contains(q) || t.Description.Contains(primaryWord))))
                 .OrderByDescending(t => t.CreatedUtc)
                 .Take(req.PageSize)
                 .Select(t => new { t.Id, t.Title, Snippet = t.Description })

@@ -1,5 +1,8 @@
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Common.Errors;
+using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +11,12 @@ namespace FamilyOs.Application.Tasks;
 public sealed class PatchTaskCommandHandler : IRequestHandler<PatchTaskCommand>
 {
     private readonly IFamilyOsDbContext _db;
+    private readonly IAiProcessingJobRepository _jobRepository;
 
-    public PatchTaskCommandHandler(IFamilyOsDbContext db)
+    public PatchTaskCommandHandler(IFamilyOsDbContext db, IAiProcessingJobRepository jobRepository)
     {
         _db = db;
+        _jobRepository = jobRepository;
     }
 
     public async Task Handle(PatchTaskCommand request, CancellationToken cancellationToken)
@@ -30,6 +35,9 @@ public sealed class PatchTaskCommandHandler : IRequestHandler<PatchTaskCommand>
             request.Priority,
             request.AssignedToFamilyMemberId,
             request.IsPrivate);
+
+        var job = AiProcessingJob.CreateForTask(AiJobType.Embed, task.Id);
+        await _jobRepository.AddAsync(job, cancellationToken);
 
         try
         {

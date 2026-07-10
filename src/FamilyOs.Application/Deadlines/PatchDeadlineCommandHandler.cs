@@ -1,5 +1,8 @@
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Common.Errors;
+using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +11,12 @@ namespace FamilyOs.Application.Deadlines;
 public sealed class PatchDeadlineCommandHandler : IRequestHandler<PatchDeadlineCommand>
 {
     private readonly IFamilyOsDbContext _db;
+    private readonly IAiProcessingJobRepository _jobRepository;
 
-    public PatchDeadlineCommandHandler(IFamilyOsDbContext db)
+    public PatchDeadlineCommandHandler(IFamilyOsDbContext db, IAiProcessingJobRepository jobRepository)
     {
         _db = db;
+        _jobRepository = jobRepository;
     }
 
     public async Task Handle(PatchDeadlineCommand request, CancellationToken cancellationToken)
@@ -30,6 +35,9 @@ public sealed class PatchDeadlineCommandHandler : IRequestHandler<PatchDeadlineC
             request.Category,
             request.RelatedFamilyMemberId,
             request.IsPrivate);
+
+        var job = AiProcessingJob.CreateForDeadline(AiJobType.Embed, deadline.Id);
+        await _jobRepository.AddAsync(job, cancellationToken);
 
         try
         {

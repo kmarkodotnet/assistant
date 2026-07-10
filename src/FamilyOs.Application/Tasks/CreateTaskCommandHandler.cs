@@ -1,6 +1,8 @@
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Tasks.Dtos;
 using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
 using MediatR;
 
 namespace FamilyOs.Application.Tasks;
@@ -8,10 +10,12 @@ namespace FamilyOs.Application.Tasks;
 public sealed class CreateTaskCommandHandler : IRequestHandler<CreateTaskCommand, TaskDto>
 {
     private readonly IFamilyOsDbContext _db;
+    private readonly IAiProcessingJobRepository _jobRepository;
 
-    public CreateTaskCommandHandler(IFamilyOsDbContext db)
+    public CreateTaskCommandHandler(IFamilyOsDbContext db, IAiProcessingJobRepository jobRepository)
     {
         _db = db;
+        _jobRepository = jobRepository;
     }
 
     public async Task<TaskDto> Handle(CreateTaskCommand request, CancellationToken cancellationToken)
@@ -27,6 +31,9 @@ public sealed class CreateTaskCommandHandler : IRequestHandler<CreateTaskCommand
 
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync(cancellationToken);
+
+        var job = AiProcessingJob.CreateForTask(AiJobType.Embed, task.Id);
+        await _jobRepository.AddAsync(job, cancellationToken);
 
         return MapToDto(task);
     }

@@ -31,6 +31,8 @@ public interface IFamilyOsDbContext
     DbSet<NotificationFeed> NotificationFeed { get; }
     DbSet<Note> Notes { get; }
     DbSet<NoteChunk> NoteChunks { get; }
+    DbSet<TaskChunk> TaskChunks { get; }
+    DbSet<DeadlineChunk> DeadlineChunks { get; }
     DbSet<NoteTag> NoteTags { get; }
     DbSet<NoteTopic> NoteTopics { get; }
     DbSet<Source> Sources { get; }

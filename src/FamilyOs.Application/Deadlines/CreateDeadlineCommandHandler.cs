@@ -1,6 +1,8 @@
 using FamilyOs.Application.Abstractions.Persistence;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Deadlines.Dtos;
 using FamilyOs.Domain.Entities;
+using FamilyOs.Domain.Enums;
 using MediatR;
 
 namespace FamilyOs.Application.Deadlines;
@@ -8,10 +10,12 @@ namespace FamilyOs.Application.Deadlines;
 public sealed class CreateDeadlineCommandHandler : IRequestHandler<CreateDeadlineCommand, DeadlineDto>
 {
     private readonly IFamilyOsDbContext _db;
+    private readonly IAiProcessingJobRepository _jobRepository;
 
-    public CreateDeadlineCommandHandler(IFamilyOsDbContext db)
+    public CreateDeadlineCommandHandler(IFamilyOsDbContext db, IAiProcessingJobRepository jobRepository)
     {
         _db = db;
+        _jobRepository = jobRepository;
     }
 
     public async Task<DeadlineDto> Handle(CreateDeadlineCommand request, CancellationToken cancellationToken)
@@ -27,6 +31,9 @@ public sealed class CreateDeadlineCommandHandler : IRequestHandler<CreateDeadlin
 
         _db.Deadlines.Add(deadline);
         await _db.SaveChangesAsync(cancellationToken);
+
+        var job = AiProcessingJob.CreateForDeadline(AiJobType.Embed, deadline.Id);
+        await _jobRepository.AddAsync(job, cancellationToken);
 
         return MapToDto(deadline);
     }

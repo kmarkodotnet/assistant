@@ -34,7 +34,7 @@ public sealed class HybridSearchHandler
         {
             Query = req.Query,
             Mode = req.Mode,
-            EntityTypes = ["documents", "notes"],
+            EntityTypes = ["documents", "notes", "tasks", "deadlines"],
             TopicSlugs = req.TopicSlugs,
             TagNames = req.TagNames,
             From = req.From,
@@ -77,8 +77,10 @@ public sealed class HybridSearchHandler
             .ToList();
 
         // Fetch titles per entity type
-        var docIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) != "note").ToList();
+        var docIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) == "document").ToList();
         var noteIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) == "note").ToList();
+        var taskIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) == "task").ToList();
+        var deadlineIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) == "deadline").ToList();
 
         var docTitles = docIds.Count > 0
             ? await _db.Documents.AsNoTracking()
@@ -94,14 +96,32 @@ public sealed class HybridSearchHandler
                 .ToDictionaryAsync(n => n.Id, n => n.Title, ct)
             : new Dictionary<Guid, string>();
 
+        var taskTitles = taskIds.Count > 0
+            ? await _db.Tasks.AsNoTracking()
+                .Where(t => taskIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Title })
+                .ToDictionaryAsync(t => t.Id, t => t.Title, ct)
+            : new Dictionary<Guid, string>();
+
+        var deadlineTitles = deadlineIds.Count > 0
+            ? await _db.Deadlines.AsNoTracking()
+                .Where(d => deadlineIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Title })
+                .ToDictionaryAsync(d => d.Id, d => d.Title, ct)
+            : new Dictionary<Guid, string>();
+
         var scoreMap = fused.ToDictionary(f => f.id, f => f.score);
 
         var hits = pagedIds.Select(id =>
         {
             var entityType = entityTypeMap.GetValueOrDefault(id, "document");
-            var title = entityType == "note"
-                ? noteTitles.GetValueOrDefault(id, string.Empty)
-                : docTitles.GetValueOrDefault(id, string.Empty);
+            var title = entityType switch
+            {
+                "note" => noteTitles.GetValueOrDefault(id, string.Empty),
+                "task" => taskTitles.GetValueOrDefault(id, string.Empty),
+                "deadline" => deadlineTitles.GetValueOrDefault(id, string.Empty),
+                _ => docTitles.GetValueOrDefault(id, string.Empty),
+            };
             var snippet = semanticHits.FirstOrDefault(h => h.EntityId == id)?.Snippet;
 
             return new SearchHit
