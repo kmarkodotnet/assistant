@@ -1,6 +1,6 @@
 namespace FamilyOs.Application.Abstractions.Ai;
 
-public record SemanticHit(Guid DocumentId, Guid ChunkId, string Snippet, double Score);
+public record SemanticHit(string EntityType, Guid EntityId, Guid ChunkId, string Snippet, double Score);
 
 public interface ISemanticSearchService
 {

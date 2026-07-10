@@ -65,8 +65,8 @@ import type { SearchMode, SearchRequest } from './models/search.dto';
                   <path stroke-linecap="round" stroke-linejoin="round"
                     d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z" />
                 </svg>
-                <p class="text-lg font-medium text-[var(--color-text-muted)]">Kérdezz bármit a dokumentumaidról</p>
-                <p class="text-sm text-[var(--color-text-muted)] mt-1">Keresés szöveg, szemantika vagy Q&A módban</p>
+                <p class="text-lg font-medium text-[var(--color-text-muted)]">Kérdezz bármit a tartalmaidról</p>
+                <p class="text-sm text-[var(--color-text-muted)] mt-1">Keres dokumentumokban, feljegyzésekben, feladatokban, határidőkben, emlékeztetőkben és javaslatokban</p>
               </div>
             } @else {
               @for (entry of facade.history(); track entry.timestamp) {

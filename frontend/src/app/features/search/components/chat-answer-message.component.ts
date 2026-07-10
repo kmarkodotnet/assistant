@@ -16,6 +16,9 @@ function entityBadgeVariant(entityType: string): BadgeVariant {
     case 'document': return 'info';
     case 'task': return 'warn';
     case 'deadline': return 'danger';
+    case 'note': return 'success';
+    case 'reminder': return 'info';
+    case 'suggestion': return 'default';
     default: return 'default';
   }
 }
@@ -25,6 +28,9 @@ function entityLabel(entityType: string): string {
     case 'document': return 'Dokumentum';
     case 'task': return 'Feladat';
     case 'deadline': return 'Határidő';
+    case 'note': return 'Feljegyzés';
+    case 'reminder': return 'Emlékeztető';
+    case 'suggestion': return 'Javaslat';
     default: return entityType;
   }
 }

@@ -27,15 +27,32 @@ public sealed class SemanticSearchService : ISemanticSearchService
         var modelName = _embedder.ModelName;
 
         var sql = @"
-            SELECT dc.document_id, dc.id as chunk_id, dc.content as snippet,
-                   1 - (dc.embedding <=> @vector) as score
-            FROM app.document_chunk dc
-            JOIN app.document d ON d.id = dc.document_id
-            WHERE dc.embedding IS NOT NULL
-              AND dc.embedding_model = @model
-              AND d.deleted_utc IS NULL
-              AND (@userId IS NULL OR d.is_private = false OR d.created_by_user_account_id = @userId::uuid)
-            ORDER BY dc.embedding <=> @vector
+            SELECT entity_type, entity_id, chunk_id, snippet, score FROM (
+                SELECT 'document' as entity_type,
+                       dc.document_id as entity_id,
+                       dc.id as chunk_id,
+                       dc.content as snippet,
+                       1 - (dc.embedding <=> @vector) as score
+                FROM app.document_chunk dc
+                JOIN app.document d ON d.id = dc.document_id
+                WHERE dc.embedding IS NOT NULL
+                  AND dc.embedding_model = @model
+                  AND d.deleted_utc IS NULL
+                  AND (@userId IS NULL OR d.is_private = false OR d.created_by_user_account_id = @userId::uuid)
+                UNION ALL
+                SELECT 'note' as entity_type,
+                       nc.note_id as entity_id,
+                       nc.id as chunk_id,
+                       nc.content as snippet,
+                       1 - (nc.embedding <=> @vector) as score
+                FROM app.note_chunk nc
+                JOIN app.note n ON n.id = nc.note_id
+                WHERE nc.embedding IS NOT NULL
+                  AND nc.embedding_model = @model
+                  AND n.deleted_utc IS NULL
+                  AND (@userId IS NULL OR n.is_private = false OR n.created_by_user_account_id = @userId::uuid)
+            ) combined
+            ORDER BY score DESC
             LIMIT @limit";
 
         var results = await _db.Database
@@ -48,13 +65,14 @@ public sealed class SemanticSearchService : ISemanticSearchService
             .ToListAsync(ct);
 
         return results
-            .Select(r => new SemanticHit(r.DocumentId, r.ChunkId, r.Snippet, r.Score))
+            .Select(r => new SemanticHit(r.EntityType, r.EntityId, r.ChunkId, r.Snippet, r.Score))
             .ToList();
     }
 
     private sealed class SemanticQueryResult
     {
-        public Guid DocumentId { get; set; }
+        public string EntityType { get; set; } = string.Empty;
+        public Guid EntityId { get; set; }
         public Guid ChunkId { get; set; }
         public string Snippet { get; set; } = string.Empty;
         public double Score { get; set; }

@@ -29,7 +29,7 @@ public sealed class QaHandler
                 Hits = searchResponse.Hits,
                 TotalCount = searchResponse.TotalCount,
                 ModeUsed = SearchMode.Qa,
-                Answer = "Nincs erre vonatkozó adat a rendelkezésre álló dokumentumokban.",
+                Answer = "Nincs erre vonatkozó adat a rendelkezésre álló tartalomban.",
                 Confidence = 0.0,
             };
         }

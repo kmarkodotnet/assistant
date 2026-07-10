@@ -37,36 +37,52 @@ public sealed class SemanticSearchHandler
         }
         catch (InfrastructureException)
         {
-            // Embedding service unavailable → return empty results gracefully.
             return new SearchResponse { ModeUsed = SearchMode.Semantic };
         }
         var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct);
 
-        // Group by document, take best score per document
-        var byDoc = semanticHits
-            .GroupBy(h => h.DocumentId)
+        // Group by (EntityType, EntityId), take best score per entity
+        var byEntity = semanticHits
+            .GroupBy(h => (h.EntityType, h.EntityId))
             .Select(g => g.OrderByDescending(h => h.Score).First())
             .OrderByDescending(h => h.Score)
             .Skip((req.Page - 1) * req.PageSize)
             .Take(req.PageSize)
             .ToList();
 
-        // Fetch titles
-        var docIds = byDoc.Select(h => h.DocumentId).ToList();
-        var titles = await _db.Documents
-            .AsNoTracking()
-            .Where(d => docIds.Contains(d.Id))
-            .Select(d => new { d.Id, d.Title })
-            .ToDictionaryAsync(d => d.Id, d => d.Title, ct);
+        // Fetch titles from each entity type
+        var docIds = byEntity.Where(h => h.EntityType == "document").Select(h => h.EntityId).ToList();
+        var noteIds = byEntity.Where(h => h.EntityType == "note").Select(h => h.EntityId).ToList();
 
-        var hits = byDoc.Select(h => new SearchHit
+        var docTitles = docIds.Count > 0
+            ? await _db.Documents.AsNoTracking()
+                .Where(d => docIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Title })
+                .ToDictionaryAsync(d => d.Id, d => d.Title, ct)
+            : new Dictionary<Guid, string>();
+
+        var noteTitles = noteIds.Count > 0
+            ? await _db.Notes.AsNoTracking()
+                .Where(n => noteIds.Contains(n.Id))
+                .Select(n => new { n.Id, n.Title })
+                .ToDictionaryAsync(n => n.Id, n => n.Title, ct)
+            : new Dictionary<Guid, string>();
+
+        var hits = byEntity.Select(h =>
         {
-            EntityType = "document",
-            EntityId = h.DocumentId,
-            Title = titles.GetValueOrDefault(h.DocumentId, string.Empty),
-            Snippet = h.Snippet,
-            Score = h.Score,
-            Metadata = new Dictionary<string, object?> { ["chunkId"] = h.ChunkId },
+            var title = h.EntityType == "note"
+                ? noteTitles.GetValueOrDefault(h.EntityId, string.Empty)
+                : docTitles.GetValueOrDefault(h.EntityId, string.Empty);
+
+            return new SearchHit
+            {
+                EntityType = h.EntityType,
+                EntityId = h.EntityId,
+                Title = title,
+                Snippet = h.Snippet,
+                Score = h.Score,
+                Metadata = new Dictionary<string, object?> { ["chunkId"] = h.ChunkId },
+            };
         }).ToList();
 
         return new SearchResponse

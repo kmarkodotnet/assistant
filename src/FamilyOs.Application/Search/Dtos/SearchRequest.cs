@@ -6,7 +6,7 @@ public sealed class SearchRequest
 {
     public string Query { get; set; } = string.Empty;
     public SearchMode Mode { get; set; } = SearchMode.Auto;
-    public string[]? EntityTypes { get; set; } // "documents", "tasks", "deadlines"
+    public string[]? EntityTypes { get; set; } // "documents", "tasks", "deadlines", "notes", "reminders", "suggestions"
     public string[]? TopicSlugs { get; set; }
     public string[]? TagNames { get; set; }
     public DateOnly? From { get; set; }

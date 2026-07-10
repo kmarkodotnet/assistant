@@ -28,9 +28,23 @@ public sealed class HybridSearchHandler
     public async Task<(SearchResponse response, IReadOnlyList<(string chunkId, string content)> topChunks)>
         SearchWithChunksAsync(SearchRequest req, Guid? userId, CancellationToken ct)
     {
-        // Run FTS and semantic in parallel
+        // Run FTS and semantic in parallel.
+        // Restrict FTS to entity types that have semantic embeddings (documents, notes).
+        var ftsReq = new SearchRequest
+        {
+            Query = req.Query,
+            Mode = req.Mode,
+            EntityTypes = ["documents", "notes"],
+            TopicSlugs = req.TopicSlugs,
+            TagNames = req.TagNames,
+            From = req.From,
+            To = req.To,
+            RelatedFamilyMemberId = req.RelatedFamilyMemberId,
+            Page = req.Page,
+            PageSize = req.PageSize,
+        };
         var embeddingTask = _embeddingCache.GetOrComputeAsync(req.Query, ct);
-        var ftsTask = _ftsHandler.SearchAsync(req, userId, ct);
+        var ftsTask = _ftsHandler.SearchAsync(ftsReq, userId, ct);
 
         await System.Threading.Tasks.Task.WhenAll(embeddingTask, ftsTask);
 
@@ -39,11 +53,18 @@ public sealed class HybridSearchHandler
 
         var semanticHits = await _semanticSearch.SearchAsync(embedding, req.PageSize * 2, userId, ct);
 
+        // Build entity type map (semantic hits take precedence for type resolution)
+        var entityTypeMap = new Dictionary<Guid, string>();
+        foreach (var hit in ftsResponse.Hits)
+            entityTypeMap[hit.EntityId] = hit.EntityType;
+        foreach (var hit in semanticHits)
+            entityTypeMap[hit.EntityId] = hit.EntityType;
+
         // Build ranked lists for RRF
         var ftsRanked = ftsResponse.Hits.Select(h => h.EntityId).ToList();
         var vectorRanked = semanticHits
-            .GroupBy(h => h.DocumentId)
-            .Select(g => g.OrderByDescending(x => x.Score).First().DocumentId)
+            .GroupBy(h => h.EntityId)
+            .Select(g => g.OrderByDescending(x => x.Score).First().EntityId)
             .ToList();
 
         var fused = ReciprocalRankFusion.Fuse(ftsRanked, vectorRanked);
@@ -54,24 +75,43 @@ public sealed class HybridSearchHandler
             .Select(f => f.id)
             .ToList();
 
-        var titles = await _db.Documents
-            .AsNoTracking()
-            .Where(d => pagedIds.Contains(d.Id))
-            .Select(d => new { d.Id, d.Title })
-            .ToDictionaryAsync(d => d.Id, d => d.Title, ct);
+        // Fetch titles per entity type
+        var docIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) != "note").ToList();
+        var noteIds = pagedIds.Where(id => entityTypeMap.GetValueOrDefault(id) == "note").ToList();
+
+        var docTitles = docIds.Count > 0
+            ? await _db.Documents.AsNoTracking()
+                .Where(d => docIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Title })
+                .ToDictionaryAsync(d => d.Id, d => d.Title, ct)
+            : new Dictionary<Guid, string>();
+
+        var noteTitles = noteIds.Count > 0
+            ? await _db.Notes.AsNoTracking()
+                .Where(n => noteIds.Contains(n.Id))
+                .Select(n => new { n.Id, n.Title })
+                .ToDictionaryAsync(n => n.Id, n => n.Title, ct)
+            : new Dictionary<Guid, string>();
 
         var scoreMap = fused.ToDictionary(f => f.id, f => f.score);
 
-        var hits = pagedIds
-            .Select(id => new SearchHit
+        var hits = pagedIds.Select(id =>
+        {
+            var entityType = entityTypeMap.GetValueOrDefault(id, "document");
+            var title = entityType == "note"
+                ? noteTitles.GetValueOrDefault(id, string.Empty)
+                : docTitles.GetValueOrDefault(id, string.Empty);
+            var snippet = semanticHits.FirstOrDefault(h => h.EntityId == id)?.Snippet;
+
+            return new SearchHit
             {
-                EntityType = "document",
+                EntityType = entityType,
                 EntityId = id,
-                Title = titles.GetValueOrDefault(id, string.Empty),
+                Title = title,
                 Score = scoreMap.GetValueOrDefault(id),
-                Snippet = semanticHits.FirstOrDefault(h => h.DocumentId == id)?.Snippet,
-            })
-            .ToList();
+                Snippet = snippet,
+            };
+        }).ToList();
 
         var topChunks = semanticHits
             .Take(20)
