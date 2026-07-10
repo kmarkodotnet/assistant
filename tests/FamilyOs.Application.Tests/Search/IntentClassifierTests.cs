@@ -11,6 +11,9 @@ public sealed class IntentClassifierTests
     [InlineData("mikor jár le a határidő", SearchIntent.Lookup)]
     [InlineData("foglald össze a szerződést", SearchIntent.Summarize)]
     [InlineData("hol találom a számlát", SearchIntent.Find)]
+    [InlineData("Mennyi villanyszámlát fizettünk az elmúlt 6 hónapban?", SearchIntent.Aggregate)]
+    [InlineData("Összesen mennyit fizettünk a biztosításra?", SearchIntent.Aggregate)]
+    [InlineData("hányszor fizettünk elő a Netflixre", SearchIntent.Aggregate)]
     public void Classify_ReturnsExpectedIntent(string query, SearchIntent expectedIntent)
     {
         var (intent, confidence) = IntentClassifier.Classify(query);

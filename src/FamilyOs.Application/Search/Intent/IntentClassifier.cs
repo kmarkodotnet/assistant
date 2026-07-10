@@ -1,12 +1,16 @@
 namespace FamilyOs.Application.Search.Intent;
 
-public enum SearchIntent { Filter, Lookup, Find, Summarize }
+public enum SearchIntent { Filter, Lookup, Find, Summarize, Aggregate }
 
 public static class IntentClassifier
 {
     public static (SearchIntent intent, double confidence) Classify(string query)
     {
         var q = query.ToLowerInvariant();
+
+        if (ContainsAny(q, "mennyi", "összesen", "átlagosan", "hányszor") &&
+            ContainsAny(q, "fizet", "szamla", "számla", "kiadás", "kiadas", "koltseg", "költség", "forint", "huf", "ft"))
+            return (SearchIntent.Aggregate, 0.85);
 
         if (ContainsAny(q, "összes", "minden", "mutasd", "lista", "listázd"))
             return (SearchIntent.Filter, 0.8);

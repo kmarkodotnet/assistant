@@ -56,6 +56,7 @@ public sealed class SearchHandler : IRequestHandler<SearchCommand, SearchRespons
             SearchIntent.Filter => SearchMode.Filter,
             SearchIntent.Lookup => SearchMode.Text,
             SearchIntent.Summarize => SearchMode.Qa,
+            SearchIntent.Aggregate => SearchMode.Qa,
             SearchIntent.Find when confidence >= 0.7 => SearchMode.Semantic,
             _ => SearchMode.Semantic, // low confidence → semantic (hybrid internally)
         };

@@ -1,5 +1,6 @@
 using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Application.Search.Dtos;
+using FamilyOs.Application.Search.Intent;
 using FamilyOs.Application.Search.Qa;
 
 namespace FamilyOs.Application.Search.Handlers;
@@ -8,11 +9,13 @@ public sealed class QaHandler
 {
     private readonly HybridSearchHandler _hybridHandler;
     private readonly IQuestionAnswerService _qaService;
+    private readonly AggregateSearchHandler _aggregateHandler;
 
-    public QaHandler(HybridSearchHandler hybridHandler, IQuestionAnswerService qaService)
+    public QaHandler(HybridSearchHandler hybridHandler, IQuestionAnswerService qaService, AggregateSearchHandler aggregateHandler)
     {
         _hybridHandler = hybridHandler;
         _qaService = qaService;
+        _aggregateHandler = aggregateHandler;
     }
 
     public async Task<SearchResponse> SearchAsync(
@@ -20,6 +23,10 @@ public sealed class QaHandler
         Guid? userId,
         CancellationToken ct)
     {
+        var (intent, confidence) = IntentClassifier.Classify(req.Query);
+        if (intent == SearchIntent.Aggregate && confidence >= 0.6)
+            return await _aggregateHandler.SearchAsync(req, userId, ct);
+
         var (searchResponse, topChunks) = await _hybridHandler.SearchWithChunksAsync(req, userId, ct);
 
         if (topChunks.Count == 0)

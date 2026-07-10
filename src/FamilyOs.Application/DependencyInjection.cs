@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<FtsSearchHandler>();
         services.AddScoped<SemanticSearchHandler>();
         services.AddScoped<HybridSearchHandler>();
+        services.AddScoped<AggregateSearchHandler>();
         services.AddScoped<QaHandler>();
 
         return services;
