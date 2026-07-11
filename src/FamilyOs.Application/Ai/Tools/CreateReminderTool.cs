@@ -3,6 +3,7 @@ using System.Text.Json;
 using FamilyOs.Application.Abstractions.Ai;
 using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Common.Authorization;
+using FamilyOs.Application.Common.Errors;
 using FamilyOs.Application.Deadlines;
 using FamilyOs.Application.Reminders;
 using FamilyOs.Domain.Enums;
@@ -69,7 +70,12 @@ public sealed class CreateReminderTool(
         string anchorRef, int offsetDays, string channel, string? recurrence, ToolExecutionContext ctx, CancellationToken ct)
     {
         var candidates = await db.Tasks.AsNoTracking().Where(t => t.DueDateUtc != null).ToListAsync(ct);
-        var (outcome, task) = RefMatcher.Match(candidates, anchorRef, t => t.Title);
+        // Same visibility scoping as the warranty branch below and AssignDocumentTool/
+        // AddDocumentTagTool — without this, a title-only match would let one user create a
+        // reminder (and leak the title+date in the confirmation card) for another user's
+        // private task (code review finding on c43dd87).
+        var visible = candidates.Where(authService.CanReadTask).ToList();
+        var (outcome, task) = RefMatcher.Match(visible, anchorRef, t => t.Title);
 
         if (outcome != RefMatchOutcome.Found || task is null)
             return NotFoundOrAmbiguous(outcome, "feladatot", anchorRef);
@@ -102,7 +108,9 @@ public sealed class CreateReminderTool(
         string anchorRef, int offsetDays, string channel, string? recurrence, ToolExecutionContext ctx, CancellationToken ct)
     {
         var candidates = await db.Deadlines.AsNoTracking().ToListAsync(ct);
-        var (outcome, deadline) = RefMatcher.Match(candidates, anchorRef, d => d.Title);
+        // See ResolveTaskAsync above for why this filter is required.
+        var visible = candidates.Where(authService.CanReadDeadline).ToList();
+        var (outcome, deadline) = RefMatcher.Match(visible, anchorRef, d => d.Title);
 
         if (outcome != RefMatchOutcome.Found || deadline is null)
             return NotFoundOrAmbiguous(outcome, "határidőt", anchorRef);
@@ -225,10 +233,24 @@ public sealed class CreateReminderTool(
         else if (anchorType == "task")
         {
             taskId = resolvedArguments.GetProperty("taskId").GetGuid();
+
+            // Defense-in-depth backstop (code review finding on c43dd87): the proposal token
+            // is valid for up to TOOLCALL_PROPOSAL_TTL_SECONDS (default 10 min, ADR-0011 D1),
+            // during which the task could be deleted or its visibility could change — re-check
+            // right before dispatching the write, don't just trust what ResolveAsync saw.
+            var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId, ct)
+                ?? throw new NotFoundException("Task", taskId.Value);
+            if (!authService.CanReadTask(task))
+                throw new ForbiddenException("Nincs jogosultsága ehhez a feladathoz emlékeztetőt létrehozni.");
         }
         else
         {
             deadlineId = resolvedArguments.GetProperty("deadlineId").GetGuid();
+
+            var deadline = await db.Deadlines.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deadlineId, ct)
+                ?? throw new NotFoundException("Deadline", deadlineId.Value);
+            if (!authService.CanReadDeadline(deadline))
+                throw new ForbiddenException("Nincs jogosultsága ehhez a határidőhöz emlékeztetőt létrehozni.");
         }
 
         var reminderCmd = new CreateReminderCommand(

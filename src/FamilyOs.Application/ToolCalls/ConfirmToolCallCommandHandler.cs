@@ -11,6 +11,7 @@ namespace FamilyOs.Application.ToolCalls;
 /// <summary>api-design.md §16.3.1 — validate token → ITool.ExecuteAsync → explicit Approve audit.</summary>
 public sealed class ConfirmToolCallCommandHandler(
     IToolCallTokenService tokenService,
+    IToolCallReplayGuard replayGuard,
     IToolRegistry registry,
     ICurrentUserAccessor currentUser,
     IAuditLogger auditLogger)
@@ -30,6 +31,14 @@ public sealed class ConfirmToolCallCommandHandler(
                 ? new ForbiddenException("A javaslat nem az Ön munkamenetéhez tartozik.")
                 : new UnauthorizedException("A javaslat lejárt vagy érvénytelen. Kérje újra a parancsot.");
         }
+
+        // Replay guard (code review finding on c43dd87): create_reminder/create_deadline are
+        // not idempotent like add_tag/assign_document, and the stateless token (ADR-0011 D1)
+        // can otherwise be re-submitted (double-click, client retry) within its ~10 min TTL,
+        // creating duplicate reminders/deadlines. First submission wins; every resubmission
+        // of the same token is a conflict, not a fresh execution.
+        if (!replayGuard.TryConsume(envelope.Jti, envelope.ExpiresUtc))
+            throw new ConflictException("Ez a javaslat már végre lett hajtva.");
 
         if (!registry.TryGet(envelope.Tool, out var tool))
             throw new UnauthorizedException("Ismeretlen tool a javaslatban.");

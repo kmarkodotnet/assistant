@@ -22,8 +22,9 @@ public sealed class ToolCallTokenService(ToolCallTokenOptions options) : IToolCa
     {
         var iat = DateTime.UtcNow;
         var exp = iat.AddSeconds(options.TtlSeconds);
+        var jti = Guid.NewGuid();
 
-        var payload = new TokenPayload(1, toolName, resolvedArguments, userAccountId, ToUnixSeconds(iat), ToUnixSeconds(exp));
+        var payload = new TokenPayload(1, jti, toolName, resolvedArguments, userAccountId, ToUnixSeconds(iat), ToUnixSeconds(exp));
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOpts);
         var sig = Sign(payloadBytes);
 
@@ -70,7 +71,7 @@ public sealed class ToolCallTokenService(ToolCallTokenOptions options) : IToolCa
         if (payload.Uid != currentUserAccountId)
             return ToolCallTokenValidation.Failure(ToolCallTokenError.UserMismatch);
 
-        var envelope = new ToolCallEnvelope(payload.Tool, payload.Args, payload.Uid, FromUnixSeconds(payload.Iat), expiresUtc);
+        var envelope = new ToolCallEnvelope(payload.Jti, payload.Tool, payload.Args, payload.Uid, FromUnixSeconds(payload.Iat), expiresUtc);
         return ToolCallTokenValidation.Success(envelope);
     }
 
@@ -101,5 +102,5 @@ public sealed class ToolCallTokenService(ToolCallTokenOptions options) : IToolCa
         return Convert.FromBase64String(padded);
     }
 
-    private sealed record TokenPayload(int V, string Tool, JsonElement Args, Guid Uid, long Iat, long Exp);
+    private sealed record TokenPayload(int V, Guid Jti, string Tool, JsonElement Args, Guid Uid, long Iat, long Exp);
 }

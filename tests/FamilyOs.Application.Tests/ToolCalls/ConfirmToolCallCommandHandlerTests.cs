@@ -22,11 +22,20 @@ public sealed class ConfirmToolCallCommandHandlerTests
         return accessor;
     }
 
+    // Default: every jti is fresh (allows the pre-existing happy-path tests to focus on their
+    // own concern). The dedicated replay test below configures this differently.
+    private static IToolCallReplayGuard AllowingReplayGuard()
+    {
+        var guard = Substitute.For<IToolCallReplayGuard>();
+        guard.TryConsume(Arg.Any<Guid>(), Arg.Any<DateTime>()).Returns(true);
+        return guard;
+    }
+
     [Fact]
     public async Task Handle_ValidToken_ExecutesToolAndWritesApproveAudit()
     {
         var tokenService = Substitute.For<IToolCallTokenService>();
-        var envelope = new ToolCallEnvelope("add_tag", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
+        var envelope = new ToolCallEnvelope(Guid.NewGuid(), "add_tag", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
         tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Success(envelope));
 
         var resultId = Guid.NewGuid();
@@ -43,7 +52,7 @@ public sealed class ConfirmToolCallCommandHandlerTests
         });
 
         var auditLogger = Substitute.For<IAuditLogger>();
-        var handler = new ConfirmToolCallCommandHandler(tokenService, registry, CurrentUser(), auditLogger);
+        var handler = new ConfirmToolCallCommandHandler(tokenService, AllowingReplayGuard(), registry, CurrentUser(), auditLogger);
 
         var result = await handler.Handle(new ConfirmToolCallCommand("tok"), default);
 
@@ -63,7 +72,7 @@ public sealed class ConfirmToolCallCommandHandlerTests
         tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Failure(ToolCallTokenError.Expired));
 
         var handler = new ConfirmToolCallCommandHandler(
-            tokenService, Substitute.For<IToolRegistry>(), CurrentUser(), Substitute.For<IAuditLogger>());
+            tokenService, AllowingReplayGuard(), Substitute.For<IToolRegistry>(), CurrentUser(), Substitute.For<IAuditLogger>());
 
         var act = async () => await handler.Handle(new ConfirmToolCallCommand("tok"), default);
 
@@ -77,7 +86,7 @@ public sealed class ConfirmToolCallCommandHandlerTests
         tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Failure(ToolCallTokenError.UserMismatch));
 
         var handler = new ConfirmToolCallCommandHandler(
-            tokenService, Substitute.For<IToolRegistry>(), CurrentUser(), Substitute.For<IAuditLogger>());
+            tokenService, AllowingReplayGuard(), Substitute.For<IToolRegistry>(), CurrentUser(), Substitute.For<IAuditLogger>());
 
         var act = async () => await handler.Handle(new ConfirmToolCallCommand("tok"), default);
 
@@ -88,7 +97,7 @@ public sealed class ConfirmToolCallCommandHandlerTests
     public async Task Handle_EntityGoneAtExecuteTime_ThrowsBusinessRuleNot404()
     {
         var tokenService = Substitute.For<IToolCallTokenService>();
-        var envelope = new ToolCallEnvelope("add_tag", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
+        var envelope = new ToolCallEnvelope(Guid.NewGuid(), "add_tag", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
         tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Success(envelope));
 
         var tool = Substitute.For<ITool>();
@@ -104,10 +113,33 @@ public sealed class ConfirmToolCallCommandHandlerTests
         });
 
         var handler = new ConfirmToolCallCommandHandler(
-            tokenService, registry, CurrentUser(), Substitute.For<IAuditLogger>());
+            tokenService, AllowingReplayGuard(), registry, CurrentUser(), Substitute.For<IAuditLogger>());
 
         var act = async () => await handler.Handle(new ConfirmToolCallCommand("tok"), default);
 
         await act.Should().ThrowAsync<DomainBusinessRuleException>();
+    }
+
+    [Fact]
+    public async Task Handle_TokenAlreadyConsumed_ThrowsConflict_AndDoesNotExecuteTwice()
+    {
+        // The idempotency gap the code review flagged: a valid, non-expired token submitted a
+        // second time (double-click, client retry) must NOT execute create_reminder again.
+        var tokenService = Substitute.For<IToolCallTokenService>();
+        var jti = Guid.NewGuid();
+        var envelope = new ToolCallEnvelope(jti, "create_reminder", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
+        tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Success(envelope));
+
+        var replayGuard = Substitute.For<IToolCallReplayGuard>();
+        replayGuard.TryConsume(jti, envelope.ExpiresUtc).Returns(false); // already consumed
+
+        var tool = Substitute.For<ITool>();
+        var handler = new ConfirmToolCallCommandHandler(
+            tokenService, replayGuard, Substitute.For<IToolRegistry>(), CurrentUser(), Substitute.For<IAuditLogger>());
+
+        var act = async () => await handler.Handle(new ConfirmToolCallCommand("tok"), default);
+
+        await act.Should().ThrowAsync<ConflictException>();
+        await tool.DidNotReceive().ExecuteAsync(Arg.Any<JsonElement>(), Arg.Any<ToolExecutionContext>(), Arg.Any<CancellationToken>());
     }
 }

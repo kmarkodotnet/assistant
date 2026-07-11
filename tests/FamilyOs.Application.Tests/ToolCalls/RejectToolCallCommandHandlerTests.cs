@@ -24,7 +24,7 @@ public sealed class RejectToolCallCommandHandlerTests
     public async Task Handle_ValidToken_WritesRejectAuditWithToolNameAndNoOtherSideEffects()
     {
         var tokenService = Substitute.For<IToolCallTokenService>();
-        var envelope = new ToolCallEnvelope("create_reminder", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
+        var envelope = new ToolCallEnvelope(Guid.NewGuid(), "create_reminder", Args, UserId, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5));
         tokenService.Validate("tok", UserId).Returns(ToolCallTokenValidation.Success(envelope));
 
         var auditLogger = Substitute.For<IAuditLogger>();

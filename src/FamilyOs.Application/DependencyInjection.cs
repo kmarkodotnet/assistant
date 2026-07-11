@@ -56,6 +56,11 @@ public static class DependencyInjection
         services.AddScoped<IToolCallTokenService, ToolCallTokenService>();
         services.AddScoped<ToolCallPlanner>();
 
+        // In-process replay guard for /tool-calls/confirm (code review finding on c43dd87) —
+        // singleton lifetime is required since the whole point is to remember jtis across
+        // requests within the token's TTL window.
+        services.AddSingleton<IToolCallReplayGuard, ToolCallReplayGuard>();
+
         return services;
     }
 
