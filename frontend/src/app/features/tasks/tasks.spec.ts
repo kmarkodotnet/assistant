@@ -153,9 +153,9 @@ describe('Task domain enums', () => {
 
 describe('TasksPage — filter logic', () => {
   const tasks: TaskListItemDto[] = [
-    { id: '1', title: 'A', status: 'Open', priority: 'High', origin: 'Manual', assignedToFamilyMemberId: 'member-1', dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z' },
-    { id: '2', title: 'B', status: 'Open', priority: 'Low',  origin: 'Manual', assignedToFamilyMemberId: 'member-2', dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z' },
-    { id: '3', title: 'C', status: 'Open', priority: 'High', origin: 'Manual', assignedToFamilyMemberId: null,       dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z' },
+    { id: '1', title: 'A', status: 'Open', priority: 'High', origin: 'Manual', assignedToFamilyMemberId: 'member-1', dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z', description: null, sourceDocumentId: null, sourceDocumentTitle: null, cardSummary: null },
+    { id: '2', title: 'B', status: 'Open', priority: 'Low',  origin: 'Manual', assignedToFamilyMemberId: 'member-2', dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z', description: null, sourceDocumentId: null, sourceDocumentTitle: null, cardSummary: null },
+    { id: '3', title: 'C', status: 'Open', priority: 'High', origin: 'Manual', assignedToFamilyMemberId: null,       dueDateUtc: null, createdUtc: '2024-01-01T00:00:00Z', description: null, sourceDocumentId: null, sourceDocumentTitle: null, cardSummary: null },
   ];
 
   it('empty memberId returns all tasks', () => {
@@ -182,5 +182,57 @@ describe('TasksPage — filter logic', () => {
     const result = filterByPriority(tasks, 'Low');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('2');
+  });
+});
+
+// ─── New fields: cardSummary / sourceDocument (view mode support) ────────────
+
+describe('TaskListItemDto — new fields', () => {
+  it('accepts a task with cardSummary and source document info', () => {
+    const task: TaskListItemDto = {
+      id: '4',
+      title: 'D',
+      status: 'Open',
+      priority: 'Normal',
+      origin: 'ImportedFile',
+      assignedToFamilyMemberId: null,
+      dueDateUtc: null,
+      createdUtc: '2024-01-01T00:00:00Z',
+      description: null,
+      sourceDocumentId: 'doc-1',
+      sourceDocumentTitle: 'Bérleti szerződés',
+      cardSummary: 'Rövid összefoglaló a dokumentumból.',
+    };
+    expect(task.cardSummary).toBe('Rövid összefoglaló a dokumentumból.');
+    expect(task.sourceDocumentId).toBe('doc-1');
+  });
+
+  it('allows all new fields to be null', () => {
+    const task: TaskListItemDto = {
+      id: '5',
+      title: 'E',
+      status: 'Open',
+      priority: 'Normal',
+      origin: 'Manual',
+      assignedToFamilyMemberId: null,
+      dueDateUtc: null,
+      createdUtc: '2024-01-01T00:00:00Z',
+      description: null,
+      sourceDocumentId: null,
+      sourceDocumentTitle: null,
+      cardSummary: null,
+    };
+    expect(task.cardSummary).toBeNull();
+    expect(task.sourceDocumentId).toBeNull();
+  });
+});
+
+function sourceDocHref(sourceDocumentId: string): string {
+  return '/documents/' + sourceDocumentId;
+}
+
+describe('TaskFormDialogComponent — source document link', () => {
+  it('builds the /documents/:id href from sourceDocumentId', () => {
+    expect(sourceDocHref('abc-123')).toBe('/documents/abc-123');
   });
 });

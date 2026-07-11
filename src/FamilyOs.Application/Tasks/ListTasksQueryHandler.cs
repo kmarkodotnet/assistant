@@ -42,12 +42,23 @@ public sealed class ListTasksQueryHandler : IRequestHandler<ListTasksQuery, IRea
             {
                 Id = t.Id,
                 Title = t.Title,
+                Description = t.Description,
                 DueDateUtc = t.DueDateUtc,
                 Status = t.Status.ToString(),
                 Priority = t.Priority.ToString(),
                 Origin = t.Origin.ToString(),
                 AssignedToFamilyMemberId = t.AssignedToFamilyMemberId,
                 CreatedUtc = t.CreatedUtc,
+                SourceDocumentId = t.SourceDocumentId,
+                SourceDocumentTitle = t.SourceDocument != null ? t.SourceDocument.Title : null,
+                CardSummary = !string.IsNullOrWhiteSpace(t.Description)
+                    ? t.Description
+                    : (t.SourceDocumentId != null
+                        ? _db.DocumentSummaries
+                            .Where(s => s.DocumentId == t.SourceDocumentId && s.IsCurrent)
+                            .Select(s => s.Content)
+                            .FirstOrDefault()
+                        : null),
             })
             .ToListAsync(cancellationToken);
     }

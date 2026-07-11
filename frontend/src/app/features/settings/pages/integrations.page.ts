@@ -122,11 +122,11 @@ export class IntegrationsPage implements OnInit {
   }
 
   gmailSource() {
-    return this.rawSources()?.find(s => s.kind === 'Gmail') ?? null;
+    return this.rawSources()?.find(s => s.kind === 'GmailAccount') ?? null;
   }
 
   otherSources() {
-    return this.rawSources()?.filter(s => s.kind !== 'Gmail') ?? [];
+    return this.rawSources()?.filter(s => s.kind !== 'GmailAccount') ?? [];
   }
 
   async connectGmail(): Promise<void> {

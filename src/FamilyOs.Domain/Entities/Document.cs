@@ -42,7 +42,8 @@ public sealed class Document
         Guid createdByUserAccountId,
         DateOnly? documentDate = null,
         Guid? relatedFamilyMemberId = null,
-        bool isPrivate = false)
+        bool isPrivate = false,
+        Guid? sourceEmailMessageId = null)
         => new()
         {
             Id = Guid.CreateVersion7(),
@@ -58,6 +59,7 @@ public sealed class Document
             DocumentDate = documentDate,
             RelatedFamilyMemberId = relatedFamilyMemberId,
             IsPrivate = isPrivate,
+            SourceEmailMessageId = sourceEmailMessageId,
             ProcessingStatus = ProcessingStatus.Pending,
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow,

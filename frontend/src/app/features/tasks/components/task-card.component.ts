@@ -33,6 +33,11 @@ import type { TaskListItemDto } from '../models/task.dto';
       <!-- Title -->
       <p class="text-sm font-medium leading-snug mb-1">{{ task().title }}</p>
 
+      <!-- Card summary / description -->
+      @if (task().cardSummary) {
+        <p class="text-xs text-[var(--color-text-muted)] line-clamp-2 mb-1">{{ task().cardSummary }}</p>
+      }
+
       <!-- Due date -->
       @if (task().dueDateUtc) {
         <p
@@ -93,8 +98,14 @@ import type { TaskListItemDto } from '../models/task.dto';
           }
         }
         <button
+          data-testid="task-view"
+          class="px-2 py-1 text-xs rounded-lg bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] disabled:opacity-50 ml-auto"
+          [disabled]="acting()"
+          (click)="view.emit(task())"
+        >👁 Megtekint</button>
+        <button
           data-testid="task-edit"
-          class="px-2 py-1 text-xs rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface)] disabled:opacity-50 ml-auto"
+          class="px-2 py-1 text-xs rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface)] disabled:opacity-50"
           [disabled]="acting()"
           (click)="edit.emit(task())"
         >Szerkeszt</button>
@@ -112,6 +123,7 @@ export class TaskCardComponent {
   complete = output<string>();
   cancel = output<string>();
   edit = output<TaskListItemDto>();
+  view = output<TaskListItemDto>();
 
   isAi = computed(() => {
     const o = this.task().origin;

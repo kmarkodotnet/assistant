@@ -26,10 +26,14 @@ public sealed class TaskListItemDto
 {
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public DateTime? DueDateUtc { get; set; }
     public string Status { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;
     public string Origin { get; set; } = string.Empty;
     public Guid? AssignedToFamilyMemberId { get; set; }
     public DateTime CreatedUtc { get; set; }
+    public Guid? SourceDocumentId { get; set; }
+    public string? SourceDocumentTitle { get; set; }
+    public string? CardSummary { get; set; }
 }

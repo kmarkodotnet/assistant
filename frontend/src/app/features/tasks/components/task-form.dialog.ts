@@ -4,6 +4,7 @@ import {
   inject,
   input,
   output,
+  computed,
   OnInit,
   signal,
 } from '@angular/core';
@@ -29,8 +30,23 @@ import type { TaskListItemDto, CreateTaskRequest, PatchTaskRequest } from '../mo
         (click)="$event.stopPropagation()"
       >
         <h3 class="font-semibold text-lg mb-4">
-          {{ task() ? 'Feladat szerkesztése' : 'Új feladat' }}
+          {{ readonly() ? 'Feladat megtekintése' : (task() ? 'Feladat szerkesztése' : 'Új feladat') }}
         </h3>
+
+        @if (task()?.sourceDocumentId) {
+          <div class="text-sm mb-4">
+            <a
+              data-testid="task-source-link"
+              [href]="'/documents/' + task()!.sourceDocumentId"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary-600 hover:underline inline-flex items-center gap-1"
+            >
+              {{ task()!.sourceDocumentTitle || 'Forrás dokumentum megnyitása' }}
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        }
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-4">
           <!-- Title -->
@@ -114,17 +130,56 @@ import type { TaskListItemDto, CreateTaskRequest, PatchTaskRequest } from '../mo
 
           <!-- Buttons -->
           <div class="flex gap-3 justify-end pt-2">
-            <ui-button data-testid="task-cancel" variant="ghost" type="button" (click)="cancel.emit()">
-              Mégse
-            </ui-button>
-            <ui-button
-              data-testid="task-form-submit"
-              variant="primary"
-              type="submit"
-              [disabled]="form.invalid"
-            >
-              {{ task() ? 'Mentés' : 'Létrehozás' }}
-            </ui-button>
+            @if (readonly()) {
+              <!-- View mode: closing must never mutate the task — Bezár only closes. -->
+              <ui-button
+                data-testid="task-view-close"
+                variant="ghost"
+                type="button"
+                (click)="cancel.emit()"
+              >
+                Bezár
+              </ui-button>
+            } @else if (isSuggested()) {
+              <!--
+                Editing a Suggested (AI-proposed) task has no plain "save" — the only
+                meaningful actions are approve/reject (same as the card buttons). Mégse
+                only closes, same as above; it must NOT fall through to onSubmit()/save.
+              -->
+              <ui-button data-testid="task-cancel" variant="ghost" type="button" (click)="cancel.emit()">
+                Mégse
+              </ui-button>
+              <ui-button
+                data-testid="task-form-reject"
+                variant="ghost"
+                type="button"
+                [disabled]="acting()"
+                (click)="reject.emit(task()!.id)"
+              >
+                Elutasít
+              </ui-button>
+              <ui-button
+                data-testid="task-form-approve"
+                variant="primary"
+                type="button"
+                [disabled]="acting()"
+                (click)="approve.emit(task()!.id)"
+              >
+                Elfogad
+              </ui-button>
+            } @else {
+              <ui-button data-testid="task-cancel" variant="ghost" type="button" (click)="cancel.emit()">
+                Mégse
+              </ui-button>
+              <ui-button
+                data-testid="task-form-submit"
+                variant="primary"
+                type="submit"
+                [disabled]="form.invalid"
+              >
+                {{ task() ? 'Mentés' : 'Létrehozás' }}
+              </ui-button>
+            }
           </div>
         </form>
       </div>
@@ -133,9 +188,15 @@ import type { TaskListItemDto, CreateTaskRequest, PatchTaskRequest } from '../mo
 })
 export class TaskFormDialogComponent implements OnInit {
   task = input<TaskListItemDto | null>(null);
+  readonly = input(false);
+  acting = input(false);
 
   save = output<CreateTaskRequest | PatchTaskRequest>();
+  approve = output<string>();
+  reject = output<string>();
   cancel = output<void>();
+
+  isSuggested = computed(() => this.task()?.status === 'Suggested');
 
   private fb = inject(FormBuilder);
   private familyApi = inject(FamilyApiService);
@@ -160,14 +221,23 @@ export class TaskFormDialogComponent implements OnInit {
     if (t) {
       this.form.patchValue({
         title: t.title,
+        description: t.description ?? '',
         priority: t.priority,
         assignedToFamilyMemberId: t.assignedToFamilyMemberId ?? '',
         dueDate: t.dueDateUtc ? t.dueDateUtc.substring(0, 10) : '',
       });
     }
+
+    if (this.readonly()) {
+      this.form.disable();
+    }
   }
 
   onSubmit(): void {
+    // Defensive: a Suggested-task dialog has no submit button (approve/reject instead), and a
+    // readonly dialog has none either — but if a stray implicit-submit (e.g. Enter key) ever
+    // reaches here, it must never fall through to a save/patch call.
+    if (this.readonly() || this.isSuggested()) return;
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
 

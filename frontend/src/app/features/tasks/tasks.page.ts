@@ -94,6 +94,7 @@ import type { TaskListItemDto, TaskListParams, CreateTaskRequest, PatchTaskReque
                   (complete)="facade.complete($event)"
                   (cancel)="facade.cancel($event)"
                   (edit)="openEdit($event)"
+                  (view)="openView($event)"
                 />
               }
               @if (!filteredSuggested().length) {
@@ -120,6 +121,7 @@ import type { TaskListItemDto, TaskListParams, CreateTaskRequest, PatchTaskReque
                   (complete)="facade.complete($event)"
                   (cancel)="facade.cancel($event)"
                   (edit)="openEdit($event)"
+                  (view)="openView($event)"
                 />
               }
               @if (!filteredOpen().length) {
@@ -146,6 +148,7 @@ import type { TaskListItemDto, TaskListParams, CreateTaskRequest, PatchTaskReque
                   (complete)="facade.complete($event)"
                   (cancel)="facade.cancel($event)"
                   (edit)="openEdit($event)"
+                  (view)="openView($event)"
                 />
               }
               @if (!filteredInProgress().length) {
@@ -172,6 +175,7 @@ import type { TaskListItemDto, TaskListParams, CreateTaskRequest, PatchTaskReque
                   (complete)="facade.complete($event)"
                   (cancel)="facade.cancel($event)"
                   (edit)="openEdit($event)"
+                  (view)="openView($event)"
                 />
               }
               @if (!filteredDone().length) {
@@ -198,7 +202,11 @@ import type { TaskListItemDto, TaskListParams, CreateTaskRequest, PatchTaskReque
     @if (showDialog()) {
       <app-task-form-dialog
         [task]="editingTask()"
+        [readonly]="dialogReadonly()"
+        [acting]="facade.actingId() === editingTask()?.id"
         (save)="onDialogSave($event)"
+        (approve)="onDialogApprove($event)"
+        (reject)="onDialogReject($event)"
         (cancel)="closeDialog()"
       />
     }
@@ -211,6 +219,7 @@ export class TasksPage implements OnInit {
   familyMembers = signal<FamilyMemberDto[]>([]);
   showDialog = signal(false);
   editingTask = signal<TaskListItemDto | null>(null);
+  dialogReadonly = signal(false);
 
   filterMemberId = '';
   filterPriority = '';
@@ -259,17 +268,26 @@ export class TasksPage implements OnInit {
 
   openCreate(): void {
     this.editingTask.set(null);
+    this.dialogReadonly.set(false);
     this.showDialog.set(true);
   }
 
   openEdit(task: TaskListItemDto): void {
     this.editingTask.set(task);
+    this.dialogReadonly.set(false);
+    this.showDialog.set(true);
+  }
+
+  openView(task: TaskListItemDto): void {
+    this.editingTask.set(task);
+    this.dialogReadonly.set(true);
     this.showDialog.set(true);
   }
 
   closeDialog(): void {
     this.showDialog.set(false);
     this.editingTask.set(null);
+    this.dialogReadonly.set(false);
   }
 
   onDialogSave(req: CreateTaskRequest | PatchTaskRequest): void {
@@ -279,5 +297,15 @@ export class TasksPage implements OnInit {
     } else {
       this.facade.create(req as CreateTaskRequest, () => this.closeDialog());
     }
+  }
+
+  async onDialogApprove(id: string): Promise<void> {
+    await this.facade.approve(id);
+    this.closeDialog();
+  }
+
+  async onDialogReject(id: string): Promise<void> {
+    await this.facade.reject(id);
+    this.closeDialog();
   }
 }

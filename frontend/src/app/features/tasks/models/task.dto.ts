@@ -11,11 +11,13 @@ export interface TaskListItemDto {
   origin: TaskOrigin;
   assignedToFamilyMemberId: string | null;
   createdUtc: string;
+  description: string | null;
+  sourceDocumentId: string | null;
+  sourceDocumentTitle: string | null;
+  cardSummary: string | null;
 }
 
 export interface TaskDto extends TaskListItemDto {
-  description: string | null;
-  sourceDocumentId: string | null;
   createdByUserAccountId: string;
   isPrivate: boolean;
   updatedUtc: string;

@@ -22,6 +22,10 @@ public sealed class ClassifyJobRunner
         LoggerMessage.Define<Guid, int, int>(LogLevel.Information, new EventId(2, nameof(LogClassified)),
             "ClassifyJobRunner: document {Id} classified — {TagCount} tags, {TopicCount} topics.");
 
+    private static readonly Action<ILogger, Guid, Exception?> LogEmailDiscardedNoTopic =
+        LoggerMessage.Define<Guid>(LogLevel.Information, new EventId(3, nameof(LogEmailDiscardedNoTopic)),
+            "ClassifyJobRunner: email-sourced document {Id} matched no known topic — soft-deleted.");
+
     public ClassifyJobRunner(
         FamilyOsDbContext db,
         IDocumentClassifier classifier,
@@ -132,6 +136,31 @@ public sealed class ClassifyJobRunner
             {
                 await _db.AiProcessingJobs.AddAsync(
                     AiProcessingJob.Create(AiJobType.ExtractFacet, job.TargetId), ct);
+            }
+        }
+
+        // Gmail-imported content that the classifier couldn't fit into any known topic (not even
+        // the catch-all "egyeb") is treated as noise (newsletters, notifications, spam) rather than
+        // family-relevant material — soft-delete so it never surfaces in the UI. "egyeb" itself is a
+        // real match (existingDocTopics.Count > 0 in that case), so genuinely ambiguous-but-relevant
+        // mail still survives; only a fully empty topic match gets discarded. Reversible (soft
+        // delete only), never a hard delete.
+        if (existingDocTopics.Count == 0)
+        {
+            var document = await _db.Documents.FirstOrDefaultAsync(d => d.Id == job.TargetId, ct);
+            if (document is not null && document.SourceType == SourceType.Email)
+            {
+                document.SoftDelete();
+
+                var stillQueued = await _db.AiProcessingJobs
+                    .Where(j => j.TargetId == job.TargetId
+                                && j.TargetType == JobTargetType.Document
+                                && j.Status == JobStatus.Queued)
+                    .ToListAsync(ct);
+                foreach (var queuedJob in stillQueued)
+                    queuedJob.Cancel();
+
+                LogEmailDiscardedNoTopic(_logger, job.TargetId, null);
             }
         }
 

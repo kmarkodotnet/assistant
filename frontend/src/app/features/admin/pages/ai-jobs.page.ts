@@ -91,7 +91,18 @@ const STATUS_BADGE: Record<string, BadgeVariant> = {
                       <span class="text-xs text-[var(--color-text-muted)]">{{ job.attemptCount }} kísérlet</span>
                     </div>
                     <div class="text-xs text-[var(--color-text-muted)] mt-1">
-                      {{ job.targetEntityType }} / {{ job.targetEntityId | slice:0:8 }}
+                      {{ job.targetEntityType }} /
+                      @if (targetLink(job); as href) {
+                        <a
+                          data-testid="ai-job-target-link"
+                          [href]="href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary-600 hover:underline font-mono"
+                        >{{ job.targetEntityId | slice:0:8 }}…</a>
+                      } @else {
+                        <span class="font-mono">{{ job.targetEntityId | slice:0:8 }}…</span>
+                      }
                       — {{ job.createdUtc | date:'yyyy-MM-dd HH:mm' }}
                     </div>
                     @if (job.errorMessage) {
@@ -194,6 +205,20 @@ export class AiJobsPage {
 
   statusBadge(status: string): BadgeVariant {
     return STATUS_BADGE[status] ?? 'default';
+  }
+
+  // Document has a real /documents/:id detail route, so it links straight to the entity.
+  // Task/Note/Deadline only have list/board pages (no per-item deep link yet), so we link to
+  // the list instead of nowhere — still more useful than a dead GUID. EmailMessage has no
+  // viewer page at all (once synced it's converted into a Document), so it stays plain text.
+  targetLink(job: AiJobDto): string | null {
+    switch (job.targetEntityType) {
+      case 'Document': return `/documents/${job.targetEntityId}`;
+      case 'Note': return `/notes`;
+      case 'Task': return `/tasks`;
+      case 'Deadline': return `/deadlines`;
+      default: return null;
+    }
   }
 
   toggleError(id: string): void {

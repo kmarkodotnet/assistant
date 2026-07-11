@@ -39,6 +39,13 @@ public sealed class AggregateSearchHandlerTests
     [InlineData("Mennyi villanyszámlát fizettünk az elmúlt 6 hónapban?", "villan")]
     [InlineData("Összesen mennyit fizettünk a biztosításra?", "biztos")]
     [InlineData("Mennyi fizettünk?", null)]
+    // Regression: "kiadásom" (inflected "kiadás") must NOT be read as a vendor-name hint —
+    // it's a generic aggregation word, not a document/vendor keyword. Bug found via manual
+    // testing: real FinancialRecord data existed but "mennyi kiadásom volt összesen" answered
+    // "Nincs erre vonatkozó adat", because the exact-word stopword list didn't cover inflected
+    // forms of "kiadás", so it was mistaken for a vendor filter.
+    [InlineData("Mennyi kiadásom volt összesen?", null)]
+    [InlineData("Mennyi volt a bevételünk?", null)]
     public void ExtractVendorHint_ReturnsExpectedHint(string query, string? expected)
     {
         var hint = AggregateSearchHandler.ExtractVendorHint(query);
@@ -51,10 +58,10 @@ public sealed class AggregateSearchHandlerTests
     {
         var range = (new DateOnly(2025, 12, 26), new DateOnly(2026, 6, 26));
 
-        var answer = AggregateSearchHandler.FormatAnswer(123_456m, "HUF", 4, range, null);
+        var answer = AggregateSearchHandler.FormatAnswer([("HUF", 123_456m, 4)], range, null);
 
         Assert.Contains("123,456 HUF", answer);
-        Assert.Contains("4 tétel alapján", answer);
+        Assert.Contains("4 tétel", answer);
         Assert.Contains("2025.12.26", answer);
         Assert.Contains("2026.06.26", answer);
         Assert.DoesNotContain("(a(z)", answer);
@@ -65,8 +72,25 @@ public sealed class AggregateSearchHandlerTests
     {
         var range = (new DateOnly(2025, 12, 26), new DateOnly(2026, 6, 26));
 
-        var answer = AggregateSearchHandler.FormatAnswer(10_000m, "HUF", 1, range, "villany");
+        var answer = AggregateSearchHandler.FormatAnswer([("HUF", 10_000m, 1)], range, "villany");
 
         Assert.Contains("(a(z) \"villany\" tételekre)", answer);
+    }
+
+    [Fact]
+    public void FormatAnswer_MultipleCurrencies_MentionsEveryCurrency()
+    {
+        // Regression: a mixed HUF+EUR result set previously reported only the numerically
+        // dominant currency (HUF), silently dropping the EUR total from the sentence even
+        // though its source document was still listed among the hits.
+        var range = (new DateOnly(2026, 1, 10), new DateOnly(2026, 7, 10));
+
+        var answer = AggregateSearchHandler.FormatAnswer(
+            [("HUF", 147_640m, 2), ("EUR", 1_120m, 1)], range, null);
+
+        Assert.Contains("147,640 HUF", answer);
+        Assert.Contains("2 tétel", answer);
+        Assert.Contains("1,120 EUR", answer);
+        Assert.Contains("1 tétel", answer);
     }
 }
