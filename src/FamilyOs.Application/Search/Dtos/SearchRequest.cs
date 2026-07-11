@@ -1,6 +1,6 @@
 namespace FamilyOs.Application.Search.Dtos;
 
-public enum SearchMode { Auto, Filter, Text, Semantic, Qa }
+public enum SearchMode { Auto, Filter, Text, Semantic, Qa, Command }
 
 public sealed class SearchRequest
 {

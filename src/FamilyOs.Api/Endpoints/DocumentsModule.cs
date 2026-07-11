@@ -1,3 +1,4 @@
+using FamilyOs.Application.Documents.AddDocumentTag;
 using FamilyOs.Application.Documents.AddDocumentTopic;
 using FamilyOs.Application.Documents.DeleteDocument;
 using FamilyOs.Application.Documents.DownloadDocument;
@@ -118,8 +119,14 @@ public static class DocumentsModule
             return Results.Ok(result);
         }).RequireAuthorization("RequireAdult");
 
-        // Tag stubs (T-CBE-17)
-        group.MapPost("/{id:guid}/tags", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
+        // POST /api/v1/documents/{id}/tags (ADR-0011 D3 — replaces the T-CBE-17 501 stub)
+        group.MapPost("/{id:guid}/tags", async (Guid id, AddDocumentTagRequest req, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new AddDocumentTagCommand(id, req.TagId), ct);
+            return Results.Ok();
+        }).RequireAuthorization("RequireAdult");
+
+        // DELETE /api/v1/documents/{id}/tags/{tagId} — still out of scope (T-CBE-17)
         group.MapDelete("/{id:guid}/tags/{tagId:guid}", () => Results.StatusCode(501)).RequireAuthorization("RequireAdult");
 
         // POST /api/v1/documents/{id}/topics
@@ -147,3 +154,4 @@ public record UpdateDocumentTextRequest(string Content);
 public record PatchDocumentRequest(string? Title, DateOnly? DocumentDate, Guid? RelatedFamilyMemberId, bool? IsPrivate, string? RowVersion);
 public record ReprocessDocumentRequest(IReadOnlyList<string>? Jobs);
 public record AddDocumentTopicRequest(Guid TopicId);
+public record AddDocumentTagRequest(Guid TagId);

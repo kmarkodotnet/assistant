@@ -9,6 +9,17 @@ import type {
   SearchEntry,
 } from '../models/search.dto';
 
+function findPendingEntry(
+  history: SearchEntry[],
+  proposalToken: string,
+): SearchEntry | undefined {
+  return history.find(
+    e =>
+      e.response.toolCallProposal?.proposalToken === proposalToken &&
+      (e.toolCallStatus ?? 'pending') === 'pending',
+  );
+}
+
 @Injectable({ providedIn: 'root' })
 export class SearchFacade {
   private api = inject(SearchApiService);
@@ -24,7 +35,13 @@ export class SearchFacade {
     this.error.set(null);
     try {
       const response: SearchResponse = await firstValueFrom(this.api.search(query));
-      this.history.update(h => [...h, { query, response, timestamp: new Date() }]);
+      const entry: SearchEntry = {
+        query,
+        response,
+        timestamp: new Date(),
+        ...(response.toolCallProposal ? { toolCallStatus: 'pending' as const } : {}),
+      };
+      this.history.update(h => [...h, entry]);
     } catch {
       this.error.set('Nem sikerült végrehajtani a keresést.');
       this.notify.error('Nem sikerült végrehajtani a keresést.');
@@ -35,6 +52,74 @@ export class SearchFacade {
 
   clearHistory(): void {
     this.history.set([]);
+  }
+
+  /** api-design.md §16.3.1 — a javaslat végrehajtása jóváhagyás után. */
+  async confirmToolCall(proposalToken: string): Promise<void> {
+    if (!findPendingEntry(this.history(), proposalToken)) return;
+
+    this.history.update(h =>
+      h.map(e =>
+        e.response.toolCallProposal?.proposalToken === proposalToken
+          ? { ...e, toolCallStatus: 'executing' }
+          : e,
+      ),
+    );
+
+    try {
+      const result = await firstValueFrom(this.api.confirmToolCall(proposalToken));
+      this.history.update(h =>
+        h.map(e =>
+          e.response.toolCallProposal?.proposalToken === proposalToken
+            ? { ...e, toolCallStatus: 'executed', toolCallResult: result }
+            : e,
+        ),
+      );
+    } catch {
+      // Hiba esetén nulla módosítás történt a backenden — a kártya visszaáll
+      // pending állapotba, hogy a felhasználó újrapróbálhassa vagy elutasíthassa.
+      this.history.update(h =>
+        h.map(e =>
+          e.response.toolCallProposal?.proposalToken === proposalToken
+            ? { ...e, toolCallStatus: 'pending' }
+            : e,
+        ),
+      );
+      this.notify.error('Nem sikerült végrehajtani a parancsot.');
+    }
+  }
+
+  /** api-design.md §16.3.2 — a javaslat elvetése, nulla adatváltozással. */
+  async rejectToolCall(proposalToken: string, reason?: string): Promise<void> {
+    if (!findPendingEntry(this.history(), proposalToken)) return;
+
+    this.history.update(h =>
+      h.map(e =>
+        e.response.toolCallProposal?.proposalToken === proposalToken
+          ? { ...e, toolCallStatus: 'executing' }
+          : e,
+      ),
+    );
+
+    try {
+      await firstValueFrom(this.api.rejectToolCall(proposalToken, reason));
+      this.history.update(h =>
+        h.map(e =>
+          e.response.toolCallProposal?.proposalToken === proposalToken
+            ? { ...e, toolCallStatus: 'rejected' }
+            : e,
+        ),
+      );
+    } catch {
+      this.history.update(h =>
+        h.map(e =>
+          e.response.toolCallProposal?.proposalToken === proposalToken
+            ? { ...e, toolCallStatus: 'pending' }
+            : e,
+        ),
+      );
+      this.notify.error('Nem sikerült elutasítani a parancsot.');
+    }
   }
 
   loadSaved(): void {

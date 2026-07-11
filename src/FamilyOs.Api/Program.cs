@@ -120,6 +120,7 @@ app.MapAiJobsAdminEndpoints();
 app.MapAiProvidersAdminEndpoints();
 app.MapSourcesEndpoints();
 app.MapSettingsEndpoints();
+app.MapToolCallsEndpoints();
 
 // SignalR hubs
 app.MapHub<DocumentsHub>("/hubs/documents");

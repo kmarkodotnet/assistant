@@ -12,6 +12,7 @@ const MODE_LABELS: Record<SearchMode, string> = {
   Text: 'Szoveges',
   Semantic: 'Szemantikus',
   Qa: 'Q&A',
+  Command: 'Parancs',
 };
 
 @Component({

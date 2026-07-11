@@ -1,4 +1,5 @@
 using FamilyOs.Application.Abstractions.Common;
+using FamilyOs.Application.Common.Ai;
 using FamilyOs.Application.Search;
 using FamilyOs.Application.Search.Dtos;
 using FamilyOs.Application.Search.Saved;
@@ -18,8 +19,15 @@ public static class SearchModule
             SearchRequest req,
             ISender sender,
             ICurrentUserAccessor userAccessor,
+            ToolCallTokenOptions toolCallOptions,
             CancellationToken ct) =>
         {
+            // Command mode gate (mvp-backlog.md E8): "FEATURE_NL_COMMANDS=false-szal
+            // kikapcsolható" — mirrors the existing 501-stub convention used elsewhere in this
+            // codebase (DocumentsModule tag/facet stubs) for not-yet-enabled capabilities.
+            if (req.Mode == SearchMode.Command && !toolCallOptions.FeatureEnabled)
+                return Results.StatusCode(501);
+
             var command = new SearchCommand(req, userAccessor.UserAccountId, userAccessor.FamilyMemberId, userAccessor.Role);
             var result = await sender.Send(command, ct);
             return Results.Ok(result);
