@@ -705,3 +705,208 @@ egy diff-tooling-gal.
 - **Aktív AI-akciók** — pl. „Az AI maga indítsa el a renewal folyamatot
   a biztosítónál" — szándékosan **kizárva**, agent autonómia nem cél
   családi adatokon.
+
+---
+
+## 11. Tool-calling — természetes nyelvű parancsok
+
+> Bevezetve: CR260710-07 (ai_features.md §4.4). Végrehajtási modell:
+> [ADR-0011](decisions/ADR-0011-tool-calling-vegrehajtasi-modell.md).
+> Ez a szakasz a párhuzamos backend/frontend agentek **szerződése** —
+> teljes és normatív. API-oldal: [api-design.md §16.3](api-design.md).
+
+**Alapelv (nem gyengíthető):** az LLM kimenete kizárólag egy tool-hívási
+*javaslat*. Végrehajtás csak a felhasználó explicit megerősítése után, egy
+whitelistelt tool-on keresztül, kontrollált paraméterekkel történhet. Az LLM
+soha nem futtat SQL-t vagy tetszőleges műveletet. Minden végrehajtás
+auditált (ADR-0011 D4).
+
+### 11.1 `ITool` interfész (Application-abstrakció)
+
+Namespace: `FamilyOs.Application.Abstractions.Ai`. Minden tool egy DI-service,
+amely a szükséges üzleti belépési pontokat konstruktoron kapja
+(`ISender`, `IFamilyOsDbContext`, `IFamilyOsAuthorizationService`) — a tool
+**nem** ír közvetlenül DbContexttel adatot, csak MediatR command-okon át.
+
+```csharp
+public interface ITool
+{
+    // Stabil, whitelistelt azonosító; ez megy a promptba és a tokenbe.
+    string Name { get; }               // pl. "create_reminder"
+    // Magyar leírás a prompt tool-katalógusához.
+    string Description { get; }
+    // JSON Schema (draft 2020-12) a nyers LLM-argumentumokra.
+    JsonElement JsonSchema { get; }
+
+    // 1. fázis (search/Command idő): validál + feloldja a neveket/relatív
+    //    dátumokat konkrét ID-kre és UTC időpontokra. NEM ír adatot.
+    Task<ToolResolution> ResolveAsync(
+        JsonElement rawArguments, ToolExecutionContext ctx, CancellationToken ct);
+
+    // 2. fázis (confirm idő): a feloldott argumentumokból MediatR command(oka)t
+    //    épít és ISender.Send-del végrehajtja. Itt történik minden írás.
+    Task<ToolResult> ExecuteAsync(
+        JsonElement resolvedArguments, ToolExecutionContext ctx, CancellationToken ct);
+}
+
+// A hívó user pillanatképe (ICurrentUserAccessor-ból); a tool ebből veszi
+// a TargetUserAccountId/CreatedBy defaultokat és a relatív dátumok bázisát.
+public sealed record ToolExecutionContext(
+    Guid UserAccountId, Guid? FamilyMemberId, string Role,
+    DateTime NowUtc, string TimeZoneId);
+
+public sealed record ToolResolution(
+    bool Ok,
+    JsonElement ResolvedArguments, // konkrét ID-k + abszolút UTC-k
+    string Summary,                // magyar, emberi megerősítő szöveg
+    IReadOnlyList<ToolParamDisplay> Display, // címke/érték párok a kártyához
+    IReadOnlyList<string> Warnings,
+    string? Error);               // ha !Ok, magyar hibaüzenet
+
+public sealed record ToolParamDisplay(string Label, string Value);
+
+public sealed record ToolResult(
+    string ResultType,            // pl. "Reminder"
+    Guid ResultId,
+    string Summary);              // magyar visszaigazolás
+
+public interface IToolRegistry
+{
+    IReadOnlyList<ITool> All { get; }           // csak a regisztrált whitelist
+    bool TryGet(string name, out ITool tool);
+}
+```
+
+`IAiProvider`-t **nem** bővítjük tool-use-szal (az Ollama úgysem támogatja,
+lásd §8). A tool-katalógus összeállítása és a szigorú-JSON parse a
+`ToolCallPlanner` (Application) szolgáltatásba kerül, amely a meglévő
+`IAiProvider.CompleteAsync`-et hívja.
+
+**Végrehajtási sorrend:**
+1. `POST /api/v1/search` (Command mód) → `ToolCallPlanner` → LLM → parse →
+   `ResolveAsync` → aláírt `proposalToken` (ADR-0011 D1) a válaszban.
+2. UI megerősítő kártya → `POST /api/v1/tool-calls/confirm` → token
+   validálás → `ExecuteAsync` → az érintett MediatR command(ok) futnak
+   (`AuditBehavior` auto-naplóz) + a `ToolCall` explicit `Approve` audit.
+
+### 11.2 Whitelistelt tool-ok — nyers LLM-argumentum sémák
+
+Az LLM ezeket a **szemantikus** (nevekkel/relatív dátumokkal megadott)
+argumentumokat adja; a `ResolveAsync` fordítja ID-kre. A mögöttes MediatR
+command minden esetben létező (kivéve `add_tag`, lásd ADR-0011 D3).
+
+**`create_reminder`** → `CreateReminderCommand` (garancia esetén
+`CreateDeadlineCommand` + `CreateReminderCommand` lánc, ADR-0011 D2):
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["anchorType", "anchorRef", "offsetDays"],
+  "properties": {
+    "anchorType": { "enum": ["task", "deadline", "warranty"] },
+    "anchorRef":  { "type": "string", "minLength": 2, "maxLength": 200,
+                    "description": "A feladat/határidő címe vagy a termék neve." },
+    "offsetDays": { "type": "integer", "minimum": 0, "maximum": 365,
+                    "description": "Ennyi nappal a horgony dátuma ELŐTT; 0 = aznap." },
+    "channel":    { "enum": ["inApp", "email"], "default": "inApp" },
+    "recurrence": { "type": ["string", "null"], "default": null,
+                    "description": "RRULE, általában null." }
+  }
+}
+```
+Resolve: `anchorType=warranty` → `Warranty` feloldás `anchorRef` (ProductName)
+alapján a user által látható dokumentumokból; `TriggerUtc =
+WarrantyEndDate - offsetDays` (a user TZ-jében 09:00-ra normalizálva, majd
+UTC-re). `TargetUserAccountId = ctx.UserAccountId`,
+`CreatedByUserId = ctx.UserAccountId`. Task/Deadline horgony esetén a
+`ResolvedArguments` a konkrét `TaskId`/`DeadlineId`-t tartalmazza;
+warranty esetén a `SourceDocumentId`-t, `WarrantyEndDate`-et és a
+számolt `DueDateUtc`-t (a szintetizált Deadline-hoz).
+
+**`assign_document`** → `PatchDocumentCommand`:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentRef", "familyMemberRef"],
+  "properties": {
+    "documentRef":     { "type": "string", "minLength": 2, "maxLength": 200 },
+    "familyMemberRef": { "type": "string", "minLength": 1, "maxLength": 100 }
+  }
+}
+```
+Resolve → `DocumentId` + `RelatedFamilyMemberId`. A `RowVersion`-t **nem**
+tesszük a tokenbe: az `ExecuteAsync` a végrehajtás pillanatában olvassa ki
+az aktuális `RowVersion`-t, hogy elkerülje a hamis optimistic-concurrency
+hibát. Command: `PatchDocumentCommand(DocumentId, Title: null,
+DocumentDate: null, RelatedFamilyMemberId, IsPrivate: null, RowVersion)`.
+
+**`add_tag`** → `AddDocumentTagCommand(Guid DocumentId, Guid TagId)` (új, D3):
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentRef", "tagName"],
+  "properties": {
+    "documentRef": { "type": "string", "minLength": 2, "maxLength": 200 },
+    "tagName":     { "type": "string", "minLength": 1, "maxLength": 60 }
+  }
+}
+```
+Resolve → `DocumentId` + `TagId` (case-insensitive létező tag). Ha a tag nem
+létezik → `Ok=false`, magyar figyelmeztetés; MVP-ben az LLM nem hoz létre új
+tag-et.
+
+**Egyértelműsítés:** ha egy `*Ref` több entitásra illik (pl. két „biztosítás"
+nevű dokumentum) vagy egyre sem, a `ResolveAsync` `Ok=false`-t ad a
+`Warnings`-ba tett magyarázattal — a resolve **soha nem tippel**.
+
+### 11.3 Ollama szigorú-JSON tool-hívási protokoll
+
+Az Ollamának nincs natív tool-use (§8), ezért prompt-engineering. A
+`ToolCallPlanner` egy rendszer-promptot állít össze, amely tartalmazza a
+whitelist minden tool-ját (`Name` + `Description` + `JsonSchema`), majd a
+felhasználói üzenetet. A modelltől **pontosan egy** JSON-objektumot várunk,
+minden más szöveg nélkül:
+
+```json
+{
+  "action": "tool_call",
+  "tool": "create_reminder",
+  "arguments": { "anchorType": "warranty", "anchorRef": "mosógép",
+                 "offsetDays": 3, "channel": "inApp" },
+  "userConfirmationText": "Létrehozzak egy emlékeztetőt a mosógép garanciájának lejárta előtt 3 nappal?"
+}
+```
+Ha nincs illeszkedő szándék:
+```json
+{ "action": "none", "reason": "A kérés kérdés, nem utasítás." }
+```
+
+**Robusztus parse (normatív lépések):**
+1. Az első kiegyensúlyozott `{...}` blokk kinyerése a kimenetből (a modell
+   néha bevezető szöveget ír); `System.Text.Json` parse.
+2. `action ∈ {tool_call, none}`. `none` → visszaesés a normál Q&A/keresésre
+   (a Command mód ilyenkor a Q&A-választ adja vissza, tool-javaslat nélkül).
+3. `tool_call` esetén: `tool ∈ IToolRegistry` (különben elutasítás), majd
+   `arguments` validálása a tool `JsonSchema`-ja ellen (kötelező mezők,
+   típusok, `additionalProperties:false`, enum-ok, min/max).
+4. Hiba (nem-JSON, ismeretlen tool, séma-sértés) esetén **egyszeri** retry
+   korrekciós prompttal ("Válaszolj KIZÁRÓLAG a fenti sémának megfelelő
+   érvényes JSON-nal, magyarázat nélkül."). Második hiba → **nincs
+   végrehajtás**, a felhasználó udvarias magyar üzenetet kap ("Nem
+   sikerült értelmeznem ezt utasításként..."), és `AuditAction.AiCall`
+   nyom készül `success=false` details-szel.
+5. Sikeres parse után a `ResolveAsync` fut; ha `Ok=false`, a válasz a
+   `Warnings`/`Error`-t közli, javaslat nélkül. Ha `Ok=true`, elkészül a
+   `toolCallProposal` (aláírt token + display), lásd api-design §16.3.
+
+A modell hőmérséklete alacsony (0–0.2) a determinisztikusabb JSON-ért. A
+`gpt-oss:20b` jobb JSON-hűséget ad, mint a `llama3.2:3b` (§8); a Command mód
+gyenge hardveren opcionálisan letiltható (`FEATURE_NL_COMMANDS=false`).

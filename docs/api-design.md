@@ -329,10 +329,19 @@ GIS flow; login-redirect-URI nincs).
 
 ### 7.11 Tag / Topic kapcsolás
 
-`POST /api/v1/documents/{id}/tags` Body: `{ tagIds: [...] }`
+`POST /api/v1/documents/{id}/tags` Body: `{ tagId }` (egyetlen tag) — 200.
 `DELETE /api/v1/documents/{id}/tags/{tagId}`
-`POST /api/v1/documents/{id}/topics` Body: `{ topicIds: [...] }`
+`POST /api/v1/documents/{id}/topics` Body: `{ topicId }`
 `DELETE /api/v1/documents/{id}/topics/{topicId}`
+
+- **Implementáció (CR260710-07):** a `POST .../tags` a korábbi 501 stub
+  (T-CBE-17) helyett az `AddDocumentTagCommand(DocumentId, TagId)`-t hívja,
+  az `AddDocumentTopicCommand` mintájára (auth `CanWriteDocument`,
+  tag-lét ellenőrzés `404`-gyel, dedup idempotensen, `DocumentTag
+  { Origin = Manual, IsApproved = true }`). A `tagId` **létező** tag-re
+  hivatkozik; nemlétező tag → `404`. Új tag létrehozása külön a `POST
+  /api/v1/tags` (9.2) végponton.
+- **Policy:** `RequireAdult` + row-level.
 
 ### 7.12 Re-process
 
@@ -499,13 +508,15 @@ Mindegyik 200 + frissített `TaskDto`. Audit log bejegyzés keletkezik.
 ## 16. Search
 
 ### 16.1 `POST /api/v1/search`
-**Cél:** univerzális keresés és Q&A. Lásd `search-strategy.md` 2–4.
+**Cél:** univerzális keresés, Q&A és **természetes nyelvű parancsok**
+(CR260710-07). Lásd `search-strategy.md` 2–4 és
+[ai-pipeline.md §11](ai-pipeline.md).
 
 Request:
 ```json
 {
   "query": "Mikor jár le az autó kötelező biztosítása?",
-  "mode":  "auto" | "filter" | "text" | "semantic" | "qa",
+  "mode":  "auto" | "filter" | "text" | "semantic" | "qa" | "command",
   "filters": { ... },
   "page":  1, "pageSize": 20
 }
@@ -524,10 +535,88 @@ Response (mode függő):
 }
 ```
 
-**Rate limit:** `qa` és `semantic` mode: 10 req/min/user.
+**Rate limit:** `qa`, `semantic` és `command` mode: 10 req/min/user.
+
+**Command mód (természetes nyelvű parancsok):** a `mode: "command"` a query-t
+utasításként értelmezi. A backend a `ToolCallPlanner`-en át egy whitelistelt
+tool-hívási **javaslatot** ad vissza (végrehajtás nélkül). A `SearchResponse`
+egy opcionális `toolCallProposal` mezővel bővül:
+
+```json
+{
+  "mode": "command",
+  "answer": null,
+  "hits": [],
+  "toolCallProposal": {
+    "proposalToken": "eyJ2Ijox...<HMAC-aláírt boríték>",
+    "toolName": "create_reminder",
+    "summary": "Létrehozzak egy emlékeztetőt a mosógép garanciájának lejárta előtt 3 nappal?",
+    "parameters": [
+      { "label": "Termék",        "value": "Mosógép (Bosch WAT28)" },
+      { "label": "Lejárat",       "value": "2027-03-01" },
+      { "label": "Emlékeztető",   "value": "2027-02-26 09:00 (3 nappal előbb)" },
+      { "label": "Csatorna",      "value": "Alkalmazáson belül" }
+    ],
+    "warnings": [],
+    "expiresUtc": "2026-07-11T12:40:00Z"
+  }
+}
+```
+
+- Ha az LLM `action: "none"`-t ad (nem utasítás) vagy nem sikerül parse-olni,
+  a `toolCallProposal` `null`, és a válasz visszaesik a Q&A/keresésre
+  (`answer` kitöltve vagy `hits`). A backend soha nem hajt végre semmit ebben
+  a lépésben.
+- Ha a feloldás (`ResolveAsync`) `Ok=false` (nem egyértelmű dokumentum,
+  hiányzó tag, stb.), a `toolCallProposal` `null`, de a `warnings` tömb a
+  `answer` mezőben magyar magyarázatként megjelenik.
+- A `proposalToken` állapotmentes, HMAC-aláírt, ~10 percig érvényes
+  (ADR-0011 D1) — **nem** tartalmaz szerveroldali rekordot.
 
 ### 16.2 `GET /api/v1/search/saved`, `POST`, `DELETE`
 - Mentett keresések kezelése a dashboard widgethez.
+
+### 16.3 Tool-call megerősítés / elutasítás (CR260710-07)
+
+A 16.1 Command mód `toolCallProposal`-ját a felhasználó a UI-n explicit
+megerősíti vagy elveti. Minden végrehajtás auditált (ADR-0011 D4),
+a mögöttes üzleti command(ok) `AuditBehavior`-a is naplóz.
+
+#### 16.3.1 `POST /api/v1/tool-calls/confirm`
+**Cél:** a javaslat végrehajtása. A path szándékosan **nem** `/{id}`-alapú,
+mert a javaslat állapotmentes (a tokenben van).
+
+- Body: `{ "proposalToken": "eyJ2Ijox..." }`.
+- A backend: (1) HMAC-aláírás + `exp` (lejárat) + `uid` (== current user)
+  ellenőrzés; (2) a token toolját feloldja az `IToolRegistry`-ből;
+  (3) `ITool.ExecuteAsync` → a mögöttes MediatR command(ok) futnak.
+- Válasz **200**:
+  ```json
+  {
+    "executed": true,
+    "resultType": "Reminder",
+    "resultId": "01910a0c-...",
+    "summary": "Emlékeztető létrehozva 2027-02-26 09:00-ra."
+  }
+  ```
+- **401** lejárt/érvénytelen token; **403** ha a token nem a current
+  user-é vagy a mögöttes command jogosultságot sért;
+  **409** optimistic-concurrency (pl. `assign_document` közben módosult a
+  dokumentum); **422** ha a feloldott entitás időközben megszűnt.
+- Idempotencia: `Idempotency-Key` ajánlott (dupla-klikk védelem); ugyanaz a
+  token + kulcs ugyanazt a választ adja.
+- **Policy:** `RequireAdult` (a mögöttes command policy-je is érvényes,
+  row-level ellenőrzéssel).
+
+#### 16.3.2 `POST /api/v1/tool-calls/reject`
+**Cél:** a javaslat elvetése — **semmilyen** adatváltozás nem történik.
+
+- Body: `{ "proposalToken": "...", "reason?": "..." }`.
+- A backend csak egy `AuditAction.Reject` nyomot ír (`entityType =
+  "ToolCall:<toolName>"`), a §4.5 feedback-tanuláshoz (ai_features.md).
+- Válasz **204**.
+- **Policy:** `RequireAdult`. (A kliens akár hívás nélkül is eldobhatja a
+  tokent; ez az endpoint a szándékos, naplózott elutasításhoz van.)
 
 ---
 
@@ -747,3 +836,6 @@ Content-Type: application/problem+json
   csak akkor, ha mérési alapon kell.
 - **Public API kulcs** — single-tenant + LAN-only → értelmetlen MVP-ben.
 - **Streaming válasz a Q&A-ban** — SSE, v2.
+- **Tool-calling bővítés** — a whitelist szűk marad (create_reminder,
+  assign_document, add_tag); új tool csak architect-review + ADR után.
+  Natív provider tool-use (Claude/OpenAI) v2 opció (ai-pipeline.md §8).

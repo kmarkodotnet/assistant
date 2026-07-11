@@ -568,6 +568,56 @@ le pontosan, mire kérdezek.
 
 ---
 
+### E8. Természetes nyelvű parancsok (LLM tool-calling) **[C]**
+
+**Story:** Mint családtag, szeretnék a chat/keresés felületen természetes
+nyelvű *utasítást* adni (pl. „Emlékeztess 3 nappal a mosógép garancia
+lejárta előtt"), hogy ne kelljen a megfelelő űrlapra navigálnom — a rendszer
+egy megerősítésre váró javaslatot ad, és csak jóváhagyás után hajtja végre.
+
+> Kapcsolódó: [CR260710-07](change-requests/cr260710-07-termeszetes-nyelvu-parancsok.md),
+> [ai-pipeline.md §11](ai-pipeline.md), [api-design.md §16.1/§16.3](api-design.md),
+> [ADR-0011](decisions/ADR-0011-tool-calling-vegrehajtasi-modell.md).
+> **Biztonsági szempontból a lista legérzékenyebb feature-e** — szűk
+> whitelist + kötelező emberi megerősítés + teljes audit.
+
+**AC:**
+- `POST /api/v1/search { mode: 'command' }` egy whitelistelt tool-hívási
+  **javaslatot** ad vissza (`toolCallProposal`), végrehajtás nélkül. Whitelist:
+  `create_reminder`, `assign_document`, `add_tag`.
+- Adott „Emlékeztess 3 nappal a mosógép garancia lejárta előtt", **when** az
+  LLM felismeri a szándékot, **then** a UI egy konkrét, feloldott
+  paraméterű (termék, lejárat, emlékeztető-időpont) megerősítő kártyát mutat.
+- `POST /api/v1/tool-calls/confirm` → a mögöttes MediatR command(ok) futnak,
+  kontrollált paraméterekkel; az LLM soha nem futtat SQL-t/tetszőleges műveletet.
+- `POST /api/v1/tool-calls/reject` vagy a kártya eldobása → **semmilyen**
+  adatváltozás; a reject audit-nyomot ír.
+- Minden végrehajtás auditált (`AuditBehavior` + dedikált `ToolCall` nyom,
+  ADR-0011 D4).
+- Hibás/nem-értelmezhető LLM-kimenet → nincs végrehajtás, visszaesés Q&A-ra
+  (ai-pipeline.md §11.3 robusztus parse).
+- `create_reminder` garancia-horgonynál előbb egy `AiSuggested` Deadline jön
+  létre, arra épül a reminder (ADR-0011 D2 — nincs séma-migráció).
+- `add_tag` a korábbi 501 stubot (T-CBE-17) valódi `AddDocumentTagCommand`-dal
+  váltja ki (ADR-0011 D3); csak létező tag-re hivatkozik.
+
+**Tasks:**
+- **AI:** `ITool`/`IToolRegistry`/`ToolCallPlanner` (ai-pipeline.md §11.1),
+  a 3 tool `ResolveAsync`/`ExecuteAsync` + JSON schema (§11.2), Ollama
+  szigorú-JSON prompt + parse/retry (§11.3).
+- **BE:** `SearchMode.Command` + `SearchResponse.ToolCallProposal`;
+  aláírt proposal-token (HMAC, `TOOLCALL_SIGNING_KEY`); `tool-calls/confirm|reject`
+  endpointok; `AddDocumentTagCommand` + handler (a `POST /documents/{id}/tags`
+  501 stub kiváltása); `ConfirmToolCallCommand` `[NoAudit]` + explicit audit.
+- **FE:** a chat felület (`search.page.ts` / `search.facade.ts`) Command-mód
+  input + tool-hívási javaslat kártya (Approve/Reject), a `suggestions`
+  Approve/Reject flow mintájára; `search.dto.ts` bővítés (`toolCallProposal`).
+
+**Megj.:** prioritás **[C]** — MVP utáni fázisba (12+) ütemezhető; nem
+blokkolja az E1–E7 keresőt. `FEATURE_NL_COMMANDS=false`-szal kikapcsolható.
+
+---
+
 ## 6. Epic F — Feladatok és határidők
 
 ### F1. Task CRUD + státusz-átmenetek **[M]**
@@ -964,12 +1014,14 @@ hozzárendelés (a részleteket a következő doksi adja).
 | 9 | Search & Q&A | E1–E5 (E6/E7 opc.) |
 | 10 | Reminders & notifications | F1–F3, G1–G3, G6 (G4/G5 best-effort) |
 | 11 | Dashboard + topic/tag/notes | H1, H2, I1, I2, L1, L2, F3 (FE) |
-| 12 | Hardening, tests, security | J1–J4, K1 (S), K2 (S), K3, M1–M4, security audit |
+| 12 | Hardening, tests, security | J1–J4, K1 (S), K2 (S), K3, M1–M4, E8 (opc.), security audit |
 
 > A fázis↔story leképezés **normatív forrása az `implementation-plan.md`**
 > — eltérés esetén az a mérvadó, ez a tábla csak áttekintés.
+> Az E8 (természetes nyelvű parancsok, **[C]**) MVP-utáni opcionális
+> feature — a 12. fázisba vagy egy külön post-MVP iterációba ütemezhető.
 
-**Total story count:** ~50 (Must: ~28, Should: ~18, Could: ~4)
+**Total story count:** ~51 (Must: ~28, Should: ~18, Could: ~5)
 
 ---
 
