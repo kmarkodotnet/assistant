@@ -47,6 +47,10 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddHostedService<DueReminderDispatcher>();
         services.AddHostedService<EscalationScheduler>();
         services.AddHostedService<NotificationFeedRetentionJob>();
+
+        // Proactive daily/weekly digest (docs/contracts/daily-digest-contract.md, ADR-0011)
+        services.Configure<DailyDigestOptions>(ctx.Configuration.GetSection("DailyDigest"));
+        services.AddHostedService<DailyDigestJob>();
     });
 
 var host = builder.Build();

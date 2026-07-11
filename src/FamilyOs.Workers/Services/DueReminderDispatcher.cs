@@ -2,6 +2,7 @@ using FamilyOs.Application.Abstractions.Notifications;
 using FamilyOs.Domain.Entities;
 using FamilyOs.Domain.Enums;
 using FamilyOs.Domain.Services;
+using FamilyOs.Infrastructure.Notifications;
 using FamilyOs.Infrastructure.Persistence;
 using FamilyOs.Infrastructure.Recurrence;
 using Microsoft.EntityFrameworkCore;
@@ -103,10 +104,10 @@ public sealed class DueReminderDispatcher : BackgroundService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Id == reminder.TargetUserAccountId, ct);
 
-            if (user is not null && IsQuietHour(user.QuietHoursStart, user.QuietHoursEnd, now))
+            if (user is not null && QuietHours.IsQuietHour(user.QuietHoursStart, user.QuietHoursEnd, now))
             {
                 // Reschedule to QuietHoursEnd
-                var rescheduleTime = GetQuietHoursEnd(user.QuietHoursEnd, now);
+                var rescheduleTime = QuietHours.GetQuietHoursEnd(user.QuietHoursEnd, now);
                 reminder.UpdateTrigger(rescheduleTime, reminder.Channel);
                 LogQuietHoursReschedule(_logger, reminder.Id, null);
                 continue;
@@ -219,35 +220,6 @@ public sealed class DueReminderDispatcher : BackgroundService
         {
             await db.SaveChangesAsync(ct);
         }
-    }
-
-    private static bool IsQuietHour(string? start, string? end, DateTime now)
-    {
-        if (string.IsNullOrWhiteSpace(start) || string.IsNullOrWhiteSpace(end))
-            return false;
-
-        if (!TimeOnly.TryParse(start, out var quietStart) || !TimeOnly.TryParse(end, out var quietEnd))
-            return false;
-
-        var currentTime = TimeOnly.FromDateTime(now);
-
-        if (quietStart <= quietEnd)
-            return currentTime >= quietStart && currentTime < quietEnd;
-
-        // Wrap around midnight
-        return currentTime >= quietStart || currentTime < quietEnd;
-    }
-
-    private static DateTime GetQuietHoursEnd(string? end, DateTime now)
-    {
-        if (string.IsNullOrWhiteSpace(end) || !TimeOnly.TryParse(end, out var quietEnd))
-            return now.AddHours(8);
-
-        var candidate = now.Date + quietEnd.ToTimeSpan();
-        if (candidate <= now)
-            candidate = candidate.AddDays(1);
-
-        return candidate;
     }
 
     private static string GetReminderBody(Reminder reminder)
