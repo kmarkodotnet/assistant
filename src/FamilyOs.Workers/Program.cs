@@ -34,6 +34,7 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddScoped<ExtractTasksJobRunner>();
         services.AddScoped<ExtractFacetJobRunner>();
         services.AddScoped<EmbedJobRunner>();
+        services.AddScoped<ClassifyEmailJobRunner>();
         services.AddScoped<PipelineOrchestrator>();
 
         // AiJobExecutor is transient — Hangfire resolves it per invocation

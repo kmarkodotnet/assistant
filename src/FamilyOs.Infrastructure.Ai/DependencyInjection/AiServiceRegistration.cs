@@ -52,6 +52,7 @@ public static class AiServiceRegistration
         services.AddScoped<IWarrantyExtractor, OllamaWarrantyExtractor>();
         services.AddScoped<IMedicalRecordExtractor, OllamaMedicalRecordExtractor>();
         services.AddScoped<IFinancialRecordExtractor, OllamaFinancialRecordExtractor>();
+        services.AddScoped<IEmailImportanceClassifier, OllamaEmailClassifier>();
 
         // Progress notifier — no-op for workers (cross-process SignalR is post-MVP)
         services.AddSingleton<IProcessingProgressNotifier, NoOpProgressNotifier>();

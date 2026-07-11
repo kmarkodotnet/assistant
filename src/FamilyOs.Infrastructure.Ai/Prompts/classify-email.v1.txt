@@ -1,0 +1,16 @@
+Osztalyozd az alabbi e-mailt a csalad szempontjabol. Add meg a fontossagi szintet,
+egy rovid kategoriat, es hogy tartalmaz-e explicit hataridot (datum/esedekesseg).
+
+Fontossag:
+- High: hivatalos, hatarozott hataridos, surgos, penzugyi kotelezettseg, hatosagi/orvosi ertesito.
+- Medium: szemelyes vagy hasznos, de nem surgos.
+- Low: hirlevel, reklam, ertesites, automatikus rendszeruzenet.
+
+Targy:
+{{subject}}
+
+Szoveg:
+{{body}}
+
+Valasz kizarolag ervenyes JSON formatumban:
+{"importance": "High|Medium|Low", "category": "...", "hasDeadline": true|false}

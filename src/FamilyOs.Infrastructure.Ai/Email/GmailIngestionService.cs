@@ -136,8 +136,11 @@ public sealed partial class GmailIngestionService(
 
             db.EmailMessages.Add(parsed);
 
-            // Queue AI processing job so Ollama workers can analyse the email
+            // Queue AI processing jobs so Ollama workers can analyse the email. ClassifyEmail runs
+            // independently of (and in parallel with) ExtractText — it targets EmailMessage columns
+            // only and does not participate in the Document pipeline finalization.
             db.AiProcessingJobs.Add(AiProcessingJob.CreateForEmailMessage(AiJobType.ExtractText, parsed.Id));
+            db.AiProcessingJobs.Add(AiProcessingJob.CreateForEmailMessage(AiJobType.ClassifyEmail, parsed.Id));
 
             inserted++;
         }

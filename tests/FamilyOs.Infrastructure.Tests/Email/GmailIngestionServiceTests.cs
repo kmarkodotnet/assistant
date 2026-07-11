@@ -318,9 +318,11 @@ public sealed class GmailIngestionServiceTests
         insertedMessages[0].FromAddress.Should().Be("sender@example.com");
         insertedMessages[0].BodyText.Should().Be("plain body");
 
-        insertedJobs.Should().HaveCount(1);
-        insertedJobs[0].JobType.Should().Be(AiJobType.ExtractText);
-        insertedJobs[0].TargetType.Should().Be(JobTargetType.EmailMessage);
+        // ClassifyEmail is enqueued alongside ExtractText for every new EmailMessage (contract §1.1).
+        insertedJobs.Should().HaveCount(2);
+        insertedJobs.Should().Contain(j => j.JobType == AiJobType.ExtractText && j.TargetType == JobTargetType.EmailMessage);
+        insertedJobs.Should().Contain(j => j.JobType == AiJobType.ClassifyEmail && j.TargetType == JobTargetType.EmailMessage);
+        insertedJobs.Should().OnlyContain(j => j.TargetId == insertedMessages[0].Id);
 
         await db.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
