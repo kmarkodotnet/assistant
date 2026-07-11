@@ -36,6 +36,12 @@ public static class AiServiceRegistration
         services.AddSingleton<IAiProviderFactory, AiProviderFactory>();
         services.AddSingleton<IEmbedder, OllamaEmbedder>();
 
+        // ToolCallPlanner (Application layer, ai-pipeline.md §11.1) depends on IAiProvider
+        // directly rather than IAiProviderFactory (which lives in this Infrastructure.Ai
+        // project and Application must not reference) — this passthrough keeps the
+        // PrivacyMode gate (AiProviderFactory.GetProvider()) honored transparently.
+        services.AddScoped<IAiProvider>(sp => sp.GetRequiredService<IAiProviderFactory>().GetProvider());
+
         // Language detection
         services.AddSingleton<ILanguageDetector, NTextCatLanguageDetector>();
 

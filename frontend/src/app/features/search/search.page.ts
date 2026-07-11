@@ -17,12 +17,18 @@ import { Subscription } from 'rxjs';
 import { SearchFacade } from './services/search.facade';
 import { ChatUserMessageComponent } from './components/chat-user-message.component';
 import { ChatAnswerMessageComponent } from './components/chat-answer-message.component';
+import { ToolCallProposalCardComponent } from './components/tool-call-proposal-card.component';
 import type { SearchMode, SearchRequest } from './models/search.dto';
 
 @Component({
   selector: 'app-search-page',
   standalone: true,
-  imports: [FormsModule, ChatUserMessageComponent, ChatAnswerMessageComponent],
+  imports: [
+    FormsModule,
+    ChatUserMessageComponent,
+    ChatAnswerMessageComponent,
+    ToolCallProposalCardComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col h-full max-h-[calc(100vh-4rem)]">
@@ -72,6 +78,15 @@ import type { SearchMode, SearchRequest } from './models/search.dto';
               @for (entry of facade.history(); track entry.timestamp) {
                 <app-chat-user-message [query]="entry.query" />
                 <app-chat-answer-message [response]="entry.response" />
+                @if (entry.response.toolCallProposal; as proposal) {
+                  <app-tool-call-proposal-card
+                    [proposal]="proposal"
+                    [status]="entry.toolCallStatus ?? 'pending'"
+                    [result]="entry.toolCallResult ?? null"
+                    (confirm)="facade.confirmToolCall(proposal.proposalToken)"
+                    (reject)="facade.rejectToolCall(proposal.proposalToken)"
+                  />
+                }
               }
 
               <!-- Loading indicator (after last user message) -->
@@ -104,6 +119,7 @@ import type { SearchMode, SearchRequest } from './models/search.dto';
                   <option value="Semantic">Szemantikus</option>
                   <option value="Qa">Q&A</option>
                   <option value="Filter">Szűrő</option>
+                  <option value="Command">Parancs</option>
                 </select>
               </div>
 

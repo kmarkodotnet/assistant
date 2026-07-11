@@ -46,6 +46,7 @@ function truncate(text: string, max: number): string {
   imports: [BadgeComponent, AnswerSourcesComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (hasContent()) {
     <div class="flex justify-start mb-3">
       <div class="max-w-[90%] w-full">
         <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
@@ -123,12 +124,19 @@ function truncate(text: string, max: number): string {
         </div>
       </div>
     </div>
+    }
   `,
 })
 export class ChatAnswerMessageComponent {
   response = input.required<SearchResponse>();
 
   visibleHits = computed(() => this.response().hits.slice(0, 10));
+
+  // Ha Command módban csak a toolCallProposal érkezett (answer=null, hits=[]),
+  // ne jelenjen meg üres buborék — a proposal-kártya külön, alatta jelenik meg.
+  hasContent = computed(
+    () => !!this.response().answer || this.visibleHits().length > 0 || !this.response().toolCallProposal,
+  );
 
   extraCount = computed(() => {
     const total = this.response().totalCount;

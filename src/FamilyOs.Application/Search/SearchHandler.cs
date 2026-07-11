@@ -12,19 +12,22 @@ public sealed class SearchHandler : IRequestHandler<SearchCommand, SearchRespons
     private readonly SemanticSearchHandler _semanticHandler;
     private readonly HybridSearchHandler _hybridHandler;
     private readonly QaHandler _qaHandler;
+    private readonly CommandHandler _commandHandler;
 
     public SearchHandler(
         FilterSearchHandler filterHandler,
         FtsSearchHandler ftsHandler,
         SemanticSearchHandler semanticHandler,
         HybridSearchHandler hybridHandler,
-        QaHandler qaHandler)
+        QaHandler qaHandler,
+        CommandHandler commandHandler)
     {
         _filterHandler = filterHandler;
         _ftsHandler = ftsHandler;
         _semanticHandler = semanticHandler;
         _hybridHandler = hybridHandler;
         _qaHandler = qaHandler;
+        _commandHandler = commandHandler;
     }
 
     public async Task<SearchResponse> Handle(SearchCommand command, CancellationToken cancellationToken)
@@ -43,6 +46,8 @@ public sealed class SearchHandler : IRequestHandler<SearchCommand, SearchRespons
             SearchMode.Text => await _ftsHandler.SearchAsync(req, userId, cancellationToken),
             SearchMode.Semantic => await _semanticHandler.SearchAsync(req, userId, cancellationToken),
             SearchMode.Qa => await _qaHandler.SearchAsync(req, userId, cancellationToken),
+            SearchMode.Command => await _commandHandler.SearchAsync(
+                req, userId, command.UserFamilyMemberId, command.UserRole, cancellationToken),
             _ => await _hybridHandler.SearchAsync(req, userId, cancellationToken),
         };
     }

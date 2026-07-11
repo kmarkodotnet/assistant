@@ -63,6 +63,13 @@ public sealed class ExceptionToProblemDetailsMiddleware(
                 fieldErrors = vex.Errors;
                 LogDomainWarning(logger, ex.GetType().Name, vex.Message, null);
                 break;
+            case UnauthorizedException uaex:
+                statusCode = StatusCodes.Status401Unauthorized;
+                type = "https://family-os.local/errors/unauthorized";
+                title = "Hitelesítés szükséges";
+                detail = uaex.UserMessage;
+                LogDomainWarning(logger, ex.GetType().Name, uaex.Message, null);
+                break;
             case NotFoundException nex:
                 statusCode = StatusCodes.Status404NotFound;
                 type = "https://family-os.local/errors/not-found";
