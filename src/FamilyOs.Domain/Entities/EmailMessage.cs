@@ -22,6 +22,9 @@ public sealed class EmailMessage
     public DateTime? ProcessedUtc { get; private set; }
     public DateTime CreatedUtc { get; private set; }
     public DateTime UpdatedUtc { get; private set; }
+    public EmailImportance? Importance { get; private set; }
+    public string? Category { get; private set; }
+    public bool? HasDeadlineHint { get; private set; }
 
     public static EmailMessage Create(
         Guid sourceId,
@@ -64,6 +67,14 @@ public sealed class EmailMessage
     public void MarkFailed()
     {
         IngestStatus = IngestStatus.Failed;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
+    public void SetImportance(EmailImportance importance, string? category, bool hasDeadlineHint)
+    {
+        Importance = importance;
+        Category = category;
+        HasDeadlineHint = hasDeadlineHint;
         UpdatedUtc = DateTime.UtcNow;
     }
 }

@@ -5,6 +5,7 @@ public static class PromptCatalog
     public const string SysPrefix = "sysprefix.v1.txt";
     public const string Summarize = "summarize.v1.txt";
     public const string Classify = "classify.v1.txt";
+    public const string ClassifyEmail = "classify-email.v1.txt";
     public const string ExtractDeadlines = "extract-deadlines.v1.txt";
     public const string ExtractTasks = "extract-tasks.v1.txt";
     public const string ExtractWarranty = "extract-warranty.v1.txt";

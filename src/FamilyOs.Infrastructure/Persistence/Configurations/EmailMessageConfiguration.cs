@@ -45,6 +45,15 @@ internal sealed class EmailMessageConfiguration : IEntityTypeConfiguration<Email
         builder.Property(x => x.UpdatedUtc)
             .IsRequired();
 
+        builder.Property(x => x.Importance)
+            .HasConversion<string>()          // nullable enum → nullable varchar
+            .HasMaxLength(10);                // "High"|"Medium"|"Low"
+
+        builder.Property(x => x.Category)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.HasDeadlineHint);   // nullable boolean, alap-mapping
+
         builder.HasIndex(x => new { x.SourceId, x.GmailMessageId })
             .IsUnique()
             .HasDatabaseName("uix_email_message_source_gmail");
@@ -55,5 +64,9 @@ internal sealed class EmailMessageConfiguration : IEntityTypeConfiguration<Email
 
         builder.HasIndex(x => x.ReceivedUtc)
             .HasDatabaseName("ix_email_message_received_utc");
+
+        builder.HasIndex(x => x.Importance)
+            .HasDatabaseName("ix_email_message_importance_high")
+            .HasFilter("importance = 'High'");       // parciális index, lásd §6
     }
 }

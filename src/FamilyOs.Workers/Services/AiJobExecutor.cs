@@ -128,6 +128,11 @@ public sealed class AiJobExecutor
                 // Post-MVP: entity extraction not yet implemented
                 break;
 
+            case AiJobType.ClassifyEmail:
+                var classifyEmailRunner = _serviceProvider.GetRequiredService<ClassifyEmailJobRunner>();
+                await classifyEmailRunner.RunAsync(job, ct);
+                break;
+
             default:
                 throw new InvalidOperationException($"Unknown AiJobType: {job.JobType}");
         }

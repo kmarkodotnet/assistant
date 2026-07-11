@@ -11,4 +11,5 @@ public enum AiJobType
     ExtractFacet,
     ExtractEntities,
     Embed,
+    ClassifyEmail,
 }
