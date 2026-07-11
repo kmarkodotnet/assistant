@@ -20,6 +20,7 @@ export const APP_ROUTES: Routes = [
       { path: 'tasks',      loadChildren: () => import('./features/tasks/tasks.routes') },
       { path: 'deadlines',  loadChildren: () => import('./features/deadlines/deadlines.routes') },
       { path: 'reminders',  loadChildren: () => import('./features/reminders/reminders.routes') },
+      { path: 'notifications', loadChildren: () => import('./features/notifications/notifications.routes') },
       { path: 'topics',     loadChildren: () => import('./features/topics/topics.routes') },
       {
         path: 'family',

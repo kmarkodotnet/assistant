@@ -38,10 +38,10 @@ import { NotificationsApiService } from '../features/notifications/notifications
 
       <!-- Bell icon with unread notification count -->
       <a
-        routerLink="/reminders"
+        routerLink="/notifications"
         data-testid="navbar-bell"
         class="relative p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-        title="Emlékeztetők"
+        title="Értesítések"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
