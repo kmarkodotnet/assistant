@@ -14,6 +14,7 @@ export const APP_ROUTES: Routes = [
     loadComponent: () => import('./layout/shell.component').then(m => m.ShellComponent),
     children: [
       { path: '',           loadChildren: () => import('./features/dashboard/dashboard.routes') },
+      { path: 'dashboard',  redirectTo: '', pathMatch: 'full' }, // explicit target for DailyDigest ActionUrl (contract §4.4); avoids relying on the '**' catch-all
       { path: 'documents',  loadChildren: () => import('./features/documents/documents.routes') },
       { path: 'notes',      loadChildren: () => import('./features/notes/notes.routes') },
       { path: 'search',     loadChildren: () => import('./features/search/search.routes') },
