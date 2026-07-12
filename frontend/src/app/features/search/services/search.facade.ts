@@ -42,12 +42,29 @@ export class SearchFacade {
         ...(response.toolCallProposal ? { toolCallStatus: 'pending' as const } : {}),
       };
       this.history.update(h => [...h, entry]);
-    } catch {
-      this.error.set('Nem sikerült végrehajtani a keresést.');
-      this.notify.error('Nem sikerült végrehajtani a keresést.');
+    } catch (err) {
+      // Distinguish HTTP 501 (Command mode not enabled) from other errors
+      const errorMessage = this.getErrorMessage(err);
+      this.error.set(errorMessage);
+      this.notify.error(errorMessage);
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private getErrorMessage(error: unknown): string {
+    // Check if error is HttpErrorResponse with status 501
+    if (
+      error &&
+      typeof error === 'object' &&
+      'status' in error &&
+      'error' in error &&
+      (error as { status: number }).status === 501
+    ) {
+      return 'A parancs mód jelenleg nincs bekapcsolva ezen a szerveren.';
+    }
+    // Default generic error message for all other errors
+    return 'Nem sikerült végrehajtani a keresést.';
   }
 
   clearHistory(): void {

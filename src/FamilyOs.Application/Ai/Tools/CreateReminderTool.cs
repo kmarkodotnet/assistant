@@ -31,31 +31,70 @@ public sealed class CreateReminderTool(
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "additionalProperties": false,
-          "required": ["anchorType", "anchorRef", "offsetDays"],
+          "required": ["anchorType"],
           "properties": {
-            "anchorType": { "enum": ["task", "deadline", "warranty"] },
+            "anchorType": { "enum": ["task", "deadline", "warranty", "none"] },
             "anchorRef":  { "type": "string", "minLength": 2, "maxLength": 200,
                             "description": "A feladat/határidő címe vagy a termék neve." },
             "offsetDays": { "type": "integer", "minimum": 0, "maximum": 365,
                             "description": "Ennyi nappal a horgony dátuma ELŐTT; 0 = aznap." },
+            "dueDate":    { "type": "string", "format": "date",
+                            "description": "ISO yyyy-MM-dd; abszolút dátum, a relatív kifejezéseket előbb alakítsd át." },
+            "dueTime":    { "type": "string", "pattern": "^\\d{2}:\\d{2}$", "default": "09:00" },
             "channel":    { "enum": ["inApp", "email"], "default": "inApp" },
             "recurrence": { "type": ["string", "null"], "default": null,
                             "description": "RRULE, általában null." }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "anchorType": { "enum": ["task", "deadline", "warranty"] } } },
+              "then": { "required": ["anchorRef", "offsetDays"] }
+            },
+            {
+              "if": { "properties": { "anchorType": { "const": "none" } } },
+              "then": { "required": ["dueDate"] }
+            }
+          ]
         }
         """).RootElement.Clone();
 
     public async Task<ToolResolution> ResolveAsync(JsonElement rawArguments, ToolExecutionContext ctx, CancellationToken ct)
     {
         var anchorType = rawArguments.GetProperty("anchorType").GetString()!;
-        var anchorRef = rawArguments.GetProperty("anchorRef").GetString()!;
-        var offsetDays = rawArguments.GetProperty("offsetDays").GetInt32();
         var channel = rawArguments.TryGetProperty("channel", out var chEl) && chEl.ValueKind == JsonValueKind.String
             ? chEl.GetString()!
             : "inApp";
         var recurrence = rawArguments.TryGetProperty("recurrence", out var recEl) && recEl.ValueKind == JsonValueKind.String
             ? recEl.GetString()
             : null;
+
+        if (anchorType == "none")
+        {
+            if (!rawArguments.TryGetProperty("dueDate", out var dueDateEl) || dueDateEl.ValueKind != JsonValueKind.String
+                || !DateOnly.TryParseExact(dueDateEl.GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dueDate))
+                return ToolResolution.Failure("A horgony nélküli emlékeztetőhöz érvényes dátum szükséges (éééé-hh-nn).");
+
+            var dueTime = new TimeOnly(9, 0);
+            if (rawArguments.TryGetProperty("dueTime", out var dueTimeEl) && dueTimeEl.ValueKind == JsonValueKind.String)
+            {
+                if (!TimeOnly.TryParseExact(dueTimeEl.GetString(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out dueTime))
+                    return ToolResolution.Failure("Az emlékeztető időpontja érvénytelen formátumú (óó:pp).");
+            }
+
+            return await ResolveStandaloneAsync(dueDate, dueTime, channel, recurrence, ctx, ct);
+        }
+
+        // anchorRef/offsetDays are only mandatory for the anchored branches — the schema's
+        // conditional required (allOf/if-then above) documents this for the LLM, but the
+        // lightweight validator (JsonSchemaLiteValidator) doesn't evaluate allOf, so guard
+        // defensively here rather than let a missing property throw.
+        if (!rawArguments.TryGetProperty("anchorRef", out var anchorRefEl) || anchorRefEl.ValueKind != JsonValueKind.String)
+            return ToolResolution.Failure("A horgonyhoz cím vagy terméknév szükséges.");
+        if (!rawArguments.TryGetProperty("offsetDays", out var offsetDaysEl) || offsetDaysEl.ValueKind != JsonValueKind.Number)
+            return ToolResolution.Failure("Az emlékeztetőhöz meg kell adni, hány nappal a horgony előtt legyen.");
+
+        var anchorRef = anchorRefEl.GetString()!;
+        var offsetDays = offsetDaysEl.GetInt32();
 
         return anchorType switch
         {
@@ -64,6 +103,31 @@ public sealed class CreateReminderTool(
             "warranty" => await ResolveWarrantyAsync(anchorRef, offsetDays, channel, recurrence, ctx, ct),
             _ => ToolResolution.Failure($"Ismeretlen horgonytípus: {anchorType}."),
         };
+    }
+
+    private static Task<ToolResolution> ResolveStandaloneAsync(
+        DateOnly dueDate, TimeOnly dueTime, string channel, string? recurrence, ToolExecutionContext ctx, CancellationToken ct)
+    {
+        var triggerUtc = ToUtc(dueDate, dueTime, ctx.TimeZoneId);
+
+        var resolved = BuildResolvedArgs(new
+        {
+            anchorType = "none",
+            triggerUtc,
+            channel,
+            recurrence,
+            targetUserAccountId = ctx.UserAccountId,
+            createdByUserId = ctx.UserAccountId,
+        });
+
+        var summary = $"Emlékeztetőt hozok létre {FormatLocal(triggerUtc)}-ra.";
+        var display = new List<ToolParamDisplay>
+        {
+            new("Emlékeztető", FormatLocal(triggerUtc)),
+            new("Csatorna", DisplayChannel(channel)),
+        };
+
+        return Task.FromResult(new ToolResolution(true, resolved, summary, display, [], null));
     }
 
     private async Task<ToolResolution> ResolveTaskAsync(
@@ -243,7 +307,7 @@ public sealed class CreateReminderTool(
             if (!authService.CanReadTask(task))
                 throw new ForbiddenException("Nincs jogosultsága ehhez a feladathoz emlékeztetőt létrehozni.");
         }
-        else
+        else if (anchorType == "deadline")
         {
             deadlineId = resolvedArguments.GetProperty("deadlineId").GetGuid();
 
@@ -252,6 +316,8 @@ public sealed class CreateReminderTool(
             if (!authService.CanReadDeadline(deadline))
                 throw new ForbiddenException("Nincs jogosultsága ehhez a határidőhöz emlékeztetőt létrehozni.");
         }
+        // else: anchorType == "none" — standalone reminder, taskId/deadlineId stay null, no
+        // re-check needed (there's no anchored entity whose visibility could have changed).
 
         var reminderCmd = new CreateReminderCommand(
             TaskId: taskId,
@@ -275,23 +341,28 @@ public sealed class CreateReminderTool(
         return ToolResolution.Failure(error);
     }
 
-    private static DateTime ToUtc0900(DateOnly date, string timeZoneId)
+    // WarrantyEndDate has no time component, so the warranty branch always normalizes to 09:00
+    // local time — kept as a thin wrapper over the general ToUtc so that branch's call sites
+    // (and behavior) don't change.
+    private static DateTime ToUtc0900(DateOnly date, string timeZoneId) => ToUtc(date, new TimeOnly(9, 0), timeZoneId);
+
+    private static DateTime ToUtc(DateOnly date, TimeOnly time, string timeZoneId)
     {
-        var localNoon = new DateTime(date.Year, date.Month, date.Day, 9, 0, 0, DateTimeKind.Unspecified);
+        var localDateTime = new DateTime(date.Year, date.Month, date.Day, time.Hour, time.Minute, 0, DateTimeKind.Unspecified);
         try
         {
             var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-            return TimeZoneInfo.ConvertTimeToUtc(localNoon, tz);
+            return TimeZoneInfo.ConvertTimeToUtc(localDateTime, tz);
         }
         catch (TimeZoneNotFoundException)
         {
             // Defensive fallback for environments without IANA tzdata (e.g. minimal CI images) —
             // treat as UTC rather than fail the whole resolve step.
-            return DateTime.SpecifyKind(localNoon, DateTimeKind.Utc);
+            return DateTime.SpecifyKind(localDateTime, DateTimeKind.Utc);
         }
         catch (InvalidTimeZoneException)
         {
-            return DateTime.SpecifyKind(localNoon, DateTimeKind.Utc);
+            return DateTime.SpecifyKind(localDateTime, DateTimeKind.Utc);
         }
     }
 

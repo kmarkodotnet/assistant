@@ -107,3 +107,95 @@ kell módosítani az `AuditBehavior` névkonvenció-logikáját.
 - Rate limit: a Command mód a Q&A-val közös 10 req/perc/user keret alatt.
 - Elutasításkor semmilyen adatváltozás; a `reject` endpoint csak egy
   `AuditAction.Reject` nyomot ír (a §4.5 feedback-tanuláshoz később hasznos).
+
+---
+
+## Kiegészítés — 2026-07-12 (CR260710-07 utókövetés)
+
+- Státusz: Elfogadva (architect fázis)
+- Kiváltó ok: az E8 `create_reminder` tool nem tud kezelni horgony nélküli
+  parancsot (pl. *"hozz létre emlékeztetőt holnapra"*), mert nincs benne
+  feladat/határidő/termék megnevezve, a `Reminder` séma pedig DB-szinten
+  kikényszeríti a Task↔Deadline XOR-t.
+- Ez a szakasz a meglévő D1–D4 döntéseket **NEM** módosítja; egy új döntési
+  pontot (D5) ad hozzá.
+
+### D5 — Horgony nélküli (standalone) emlékeztető: az XOR-constraint lazítása
+
+**Döntés.** Bevezetjük a horgony nélküli emlékeztetőt, ahol `task_id` ÉS
+`deadline_id` egyaránt `NULL`, a `trigger_utc` pedig közvetlenül a
+felhasználó által megadott időpont. **Nem** kerül új oszlop a `reminder`
+táblába — a meglévő `trigger_utc` mező teljesen elég a szabad dátumú esethez.
+Az egyetlen sémaszintű változás a `chk_reminder_xor` CHECK-constraint
+lazítása 2-utas XOR-ról **"legfeljebb egy horgony"** szabályra:
+
+```
+-- régi (elvetett): pontosan egy horgony
+(task_id IS NOT NULL AND deadline_id IS NULL) OR
+(task_id IS NULL AND deadline_id IS NOT NULL)
+
+-- új: legfeljebb egy horgony (mindkettő NULL megengedett, mindkettő kitöltve tilos)
+NOT (task_id IS NOT NULL AND deadline_id IS NOT NULL)
+```
+
+A constraint-et megtartjuk (drop + recreate ugyanazon a néven,
+`chk_reminder_xor`), hogy a "mindkét horgony egyszerre" adathiba továbbra is
+DB-szinten lehetetlen legyen — csak a "se-se" ág nyílik meg.
+
+**Doménmodell.** A `Reminder` entitás kap egy harmadik factory-t,
+`ForStandalone(targetUserAccountId, triggerUtc, channel, createdBy, rrule?)`,
+ami mindkét horgony-ID-t `null`-ra hagyja. A meglévő `ForTask`/`ForDeadline`
+változatlan. Az entitás XOR-t magyarázó kommentje frissül ("legfeljebb egy").
+
+**Validáció.** A `CreateReminderCommandValidator` XOR-szabálya
+(`RuleFor(x => x)…Must`) helyére a gyengébb "legfeljebb egy" invariáns kerül:
+`!(x.TaskId.HasValue && x.DeadlineId.HasValue)` — mindkettő null immár valid.
+A handler `if TaskId → ForTask / else if DeadlineId → ForDeadline / else →
+ForStandalone` ágra bővül (a jelenlegi `else` implicit deadline-ág helyett).
+
+**Tool-kontrakt (`create_reminder`).** Új `anchorType` érték: `"none"`.
+Ekkor az `anchorRef` és `offsetDays` **nem** kötelező; helyette egy explicit
+`"dueDate"` (ISO `yyyy-MM-dd`, kötelező) és opcionális `"dueTime"`
+(`HH:mm`, alap `09:00`) mező adja meg a trigger időpontját, a felhasználó
+időzónájában (`ToolExecutionContext.TimeZoneId`), majd UTC-re konvertálva —
+ugyanaz a `ToUtc0900`-mintájú normalizálás, mint a warranty-ágban, csak a
+9:00 helyett a `dueTime` paraméterrel. A séma feltételes: az `if/then`
+ág (JSON Schema draft 2020-12 `allOf`) az `anchorType` szerint kényszeríti
+ki a megfelelő kötelező mezőket, hogy a `null` és a vegyes kombináció
+strukturálisan is kizárt legyen.
+
+**System prompt.** Az LLM-nek egyértelmű instrukció kell, hogy a relatív
+kifejezéseket (*"holnap"*, *"jövő hétfőn"*, *"3 nap múlva"*) **abszolút**
+`dueDate`-té alakítsa a `ToolExecutionContext.NowUtc` + `TimeZoneId`
+alapján, mielőtt a `"none"` ágat választja. Ha egy parancs egyértelműen
+horgonyra utal (feladat/határidő/termék neve elhangzik), a `"none"` ág
+**nem** választható — az elsőbbség a konkrét horgonyé.
+
+**Végrehajtás (`ExecuteAsync`).** Az `anchorType == "none"` ág a
+`CreateReminderCommand(TaskId: null, DeadlineId: null, TriggerUtc: <dueDate+
+dueTime UTC-re>, …)`-t küldi. Nincs láncolt Deadline (ellentétben a
+warranty-ággal), nincs resolve-időbeli re-check horgonyra (nincs mit
+ellenőrizni); a `targetUserAccountId`/`createdByUserId` továbbra is
+`ctx.UserAccountId`.
+
+**Indoklás.** Ez a lehető legkisebb, visszafelé kompatibilis változás: nincs
+új oszlop, nincs adatmigráció a meglévő sorokon (mind horgonyzott marad, a
+lazább constraint-et továbbra is kielégítik), a warranty-modell (D2) és a
+proposal-token (D1) érintetlen. **Elvetett alternatíva:** külön
+`standalone_reminder` tábla vagy diszkriminátor-oszlop (`anchor_type`) —
+felesleges, mert a két nullable FK + `trigger_utc` már pontosan kifejezi az
+állapotteret; a diszkriminátor redundáns lenne a FK-k nullságával.
+
+**Következmények.**
+- **1 DB-migráció** (drop + recreate `chk_reminder_xor`) — ez az egyetlen
+  sémaszintű változás; a `/operate` autonóm sávban **emberi jóváhagyást**
+  igényel (DB-migráció + API-kontrakt-változás kapu, lásd CLAUDE.md 2-es szint).
+- A `ReminderConfiguration` `HasCheckConstraint` kifejezése frissül a
+  migrációval szinkronban (különben a `dotnet ef` model-diff eltérést jelez).
+- A frontend `reminders.page.ts` jelenleg **csak megjelenít** (nincs kézi
+  create-form), a fejléc-címke `r.taskId ? 'Feladat…' : 'Határidő…'` bináris.
+  Standalone esetben mindkét ID null → a címke harmadik ágat kap
+  (pl. *"Emlékeztető"*). Ez a FE-oldal egyetlen érintett pontja.
+- A `down` migráció visszaállítja a szigorú XOR-t; ha addigra létezik
+  standalone sor, a `down` elhasal — ez elfogadott (a szigorítás nem
+  automatikusan biztonságos, dokumentált korlát).

@@ -1,10 +1,14 @@
 using System.Text.Json;
 using FamilyOs.Application.Abstractions.Ai;
+using FamilyOs.Application.Abstractions.Persistence;
 using FamilyOs.Application.Ai;
+using FamilyOs.Application.Ai.Tools;
 using FamilyOs.Application.Common.Abstractions;
 using FamilyOs.Application.Common.Ai;
+using FamilyOs.Application.Common.Authorization;
 using FamilyOs.Application.Tests.Common;
 using FamilyOs.Domain.Enums;
+using MediatR;
 using NSubstitute;
 
 namespace FamilyOs.Application.Tests.Ai;
@@ -120,5 +124,42 @@ public sealed class ToolCallPlannerTests
         result.Outcome.Should().Be(ToolPlanOutcome.ResolveFailed);
         result.Proposal.Should().BeNull();
         result.Message.Should().Contain("Nem található");
+    }
+
+    [Fact]
+    public async Task PlanAsync_StandaloneReminderNoAnchorNamed_ReturnsReadyProposal_NotFallbackToQa()
+    {
+        // Regression coverage for the bug this feature fixes (ADR-0011 D5): before the
+        // standalone branch existed, an instruction like "hozz létre emlékeztetőt holnapra"
+        // named no task/deadline/warranty, so the model had nothing valid to fill anchorRef
+        // with — the old schema's required ["anchorType","anchorRef","offsetDays"] left the
+        // model no way to express this, and it fell back to plain Q&A instead of proposing a
+        // reminder. This test wires the REAL CreateReminderTool (not a fake ITool) through the
+        // planner so it also exercises the anchorType:"none" JSON schema branch and
+        // ResolveAsync's standalone path end-to-end, not just a stubbed resolution.
+        var provider = new SequencedAiProvider("""
+            {"action":"tool_call","tool":"create_reminder","arguments":{"anchorType":"none","dueDate":"2026-07-13"},"userConfirmationText":"Létrehozzam az emlékeztetőt holnapra?"}
+            """);
+
+        var db = Substitute.For<IFamilyOsDbContext>();
+        var auth = Substitute.For<IFamilyOsAuthorizationService>();
+        var sender = Substitute.For<ISender>();
+        var tool = new CreateReminderTool(sender, db, auth);
+
+        var registry = new ToolRegistry([tool]);
+        var tokenService = new ToolCallTokenService(
+            new ToolCallTokenOptions { FeatureEnabled = true, SigningKey = "test-key-0123456789", TtlSeconds = 600 });
+        var auditLogger = Substitute.For<IAuditLogger>();
+        var planner = new ToolCallPlanner(provider, registry, tokenService, auditLogger);
+
+        var ctx = new ToolExecutionContext(
+            Guid.NewGuid(), null, "Adult", new DateTime(2026, 7, 12, 8, 0, 0, DateTimeKind.Utc), "Europe/Budapest");
+
+        var result = await planner.PlanAsync("hozz létre emlékeztetőt holnapra", ctx, default);
+
+        result.Outcome.Should().Be(ToolPlanOutcome.Ready);
+        result.Proposal.Should().NotBeNull();
+        result.Proposal!.ToolName.Should().Be("create_reminder");
+        result.Proposal.Parameters.Should().Contain(d => d.Label == "Emlékeztető");
     }
 }

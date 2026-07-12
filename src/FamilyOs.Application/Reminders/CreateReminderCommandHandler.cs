@@ -28,10 +28,19 @@ public sealed class CreateReminderCommandHandler : IRequestHandler<CreateReminde
                 request.CreatedByUserId,
                 request.RruleExpression);
         }
-        else
+        else if (request.DeadlineId.HasValue)
         {
             reminder = Reminder.ForDeadline(
-                request.DeadlineId!.Value,
+                request.DeadlineId.Value,
+                request.TargetUserAccountId,
+                request.TriggerUtc,
+                request.Channel,
+                request.CreatedByUserId,
+                request.RruleExpression);
+        }
+        else
+        {
+            reminder = Reminder.ForStandalone(
                 request.TargetUserAccountId,
                 request.TriggerUtc,
                 request.Channel,

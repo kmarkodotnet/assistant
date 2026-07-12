@@ -598,6 +598,10 @@ egy megerősítésre váró javaslatot ad, és csak jóváhagyás után hajtja v
   (ai-pipeline.md §11.3 robusztus parse).
 - `create_reminder` garancia-horgonynál előbb egy `AiSuggested` Deadline jön
   létre, arra épül a reminder (ADR-0011 D2 — nincs séma-migráció).
+- `create_reminder` horgony nélküli (standalone) parancsot is támogat (pl.
+  „hozz létre emlékeztetőt holnapra"): `anchorType: 'none'` + abszolút
+  `dueDate`, `taskId`/`deadlineId` egyaránt NULL — az XOR-constraint
+  „legfeljebb egy horgony"-ra lazul (ADR-0011 D5; 1 db constraint-migráció).
 - `add_tag` a korábbi 501 stubot (T-CBE-17) valódi `AddDocumentTagCommand`-dal
   váltja ki (ADR-0011 D3); csak létező tag-re hivatkozik.
 

@@ -7,7 +7,7 @@ public sealed class Reminder
     private Reminder() { }
 
     public Guid Id { get; private set; }
-    // XOR: either TaskId or DeadlineId, never both, never neither
+    // At most one anchor: TaskId, DeadlineId, or neither (standalone). Never both. (ADR-0011 D5)
     public Guid? TaskId { get; private set; }
     public Guid? DeadlineId { get; private set; }
     public Guid TargetUserAccountId { get; private set; }
@@ -68,6 +68,30 @@ public sealed class Reminder
             Id = Guid.CreateVersion7(),
             TaskId = null,
             DeadlineId = deadlineId,
+            TargetUserAccountId = targetUserAccountId,
+            Channel = channel,
+            Status = ReminderStatus.Scheduled,
+            TriggerUtc = triggerUtc,
+            EscalationLevel = 0,
+            CreatedByUserAccountId = createdBy,
+            RruleExpression = rrule,
+            CreatedUtc = DateTime.UtcNow,
+            UpdatedUtc = DateTime.UtcNow,
+        };
+    }
+
+    public static Reminder ForStandalone(
+        Guid targetUserAccountId,
+        DateTime triggerUtc,
+        NotificationChannel channel,
+        Guid createdBy,
+        string? rrule = null)
+    {
+        return new Reminder
+        {
+            Id = Guid.CreateVersion7(),
+            TaskId = null,
+            DeadlineId = null,
             TargetUserAccountId = targetUserAccountId,
             Channel = channel,
             Status = ReminderStatus.Scheduled,

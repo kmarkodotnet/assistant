@@ -33,7 +33,7 @@ public sealed class ToolCallPlanner(
 
     public async Task<ToolPlanResult> PlanAsync(string query, ToolExecutionContext ctx, CancellationToken ct)
     {
-        var systemPrompt = BuildSystemPrompt();
+        var systemPrompt = BuildSystemPrompt(ctx);
 
         var (parsed, error) = await TryCompleteAndParseAsync(systemPrompt, query, ct);
 
@@ -139,12 +139,15 @@ public sealed class ToolCallPlanner(
         }
     }
 
-    private string BuildSystemPrompt()
+    private string BuildSystemPrompt(ToolExecutionContext ctx)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Te a Family OS asszisztense vagy. A felhasználó egy magyar nyelvű üzenetet ír.");
         sb.AppendLine("Ha az üzenet egy VÉGREHAJTHATÓ UTASÍTÁS az alábbi tool-katalógusból, javasolj egy tool-hívást.");
         sb.AppendLine("Ha az üzenet kérdés, keresés vagy nem illik egyik tool-ra sem, ne javasolj tool-hívást.");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"A jelenlegi időpont (NowUtc): {ctx.NowUtc:yyyy-MM-ddTHH:mm:ssZ}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"A felhasználó időzónája (TimeZoneId): {ctx.TimeZoneId}");
         sb.AppendLine();
         sb.AppendLine("Elérhető tool-ok:");
 
@@ -154,6 +157,11 @@ public sealed class ToolCallPlanner(
             sb.AppendLine(CultureInfo.InvariantCulture, $"  JSON Schema: {tool.JsonSchema.GetRawText()}");
         }
 
+        sb.AppendLine();
+        sb.AppendLine("Ha az utasítás a \"create_reminder\" tool-ra illik, de nem nevez meg feladatot, határidőt vagy ");
+        sb.AppendLine("terméket, használd az \"anchorType\": \"none\" ágat, és a relatív időt (holnap, jövő hétfőn, ");
+        sb.AppendLine("3 nap múlva) számold ki a fenti NowUtc+TimeZoneId alapján abszolút \"dueDate\" (yyyy-MM-dd) ");
+        sb.AppendLine("formára. Ha konkrét horgony elhangzik, azt részesítsd előnyben a \"none\" helyett.");
         sb.AppendLine();
         sb.AppendLine("A válaszod KIZÁRÓLAG egyetlen JSON objektum legyen, más szöveg nélkül. Formátum tool-hívásnál:");
         sb.AppendLine("""{"action":"tool_call","tool":"<név>","arguments":{...},"userConfirmationText":"<magyar megerősítő kérdés>"}""");

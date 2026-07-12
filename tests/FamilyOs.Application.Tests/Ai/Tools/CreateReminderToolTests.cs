@@ -48,6 +48,13 @@ public sealed class CreateReminderToolTests
             $$"""{"anchorType":"{{anchorType}}","anchorRef":"{{anchorRef}}","offsetDays":{{offsetDays}}}""")
             .RootElement;
 
+    private static JsonElement StandaloneRawArgs(string dueDate, string? dueTime = null) =>
+        JsonDocument.Parse(
+            dueTime is null
+                ? $$"""{"anchorType":"none","dueDate":"{{dueDate}}"}"""
+                : $$"""{"anchorType":"none","dueDate":"{{dueDate}}","dueTime":"{{dueTime}}"}""")
+            .RootElement;
+
     [Fact]
     public async Task ResolveAsync_WarrantyAnchor_HappyPath_ComputesTriggerBeforeExpiry()
     {
@@ -180,6 +187,83 @@ public sealed class CreateReminderToolTests
 
         result.Ok.Should().BeFalse();
         result.Error.Should().Contain("Nem található");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoneAnchor_HappyPath_ComputesTriggerFromDueDate()
+    {
+        // Standalone branch (ADR-0011 D5): no task/deadline/warranty named, just a date —
+        // e.g. "hozz létre emlékeztetőt holnapra" resolved by the caller to an absolute dueDate.
+        var db = BuildDb();
+        var auth = Substitute.For<IFamilyOsAuthorizationService>();
+
+        var tool = new CreateReminderTool(Substitute.For<ISender>(), db, auth);
+
+        var result = await tool.ResolveAsync(StandaloneRawArgs("2026-07-13"), Ctx, default);
+
+        result.Ok.Should().BeTrue();
+        result.ResolvedArguments.GetProperty("anchorType").GetString().Should().Be("none");
+        // Europe/Budapest is UTC+2 in July (CEST); default dueTime 09:00 local => 07:00 UTC.
+        result.ResolvedArguments.GetProperty("triggerUtc").GetDateTime().Should().Be(new DateTime(2026, 7, 13, 7, 0, 0, DateTimeKind.Utc));
+        result.ResolvedArguments.TryGetProperty("taskId", out _).Should().BeFalse();
+        result.ResolvedArguments.TryGetProperty("deadlineId", out _).Should().BeFalse();
+        result.Display.Should().Contain(d => d.Label == "Emlékeztető");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoneAnchor_MalformedDueDate_ReturnsFailureNotThrow()
+    {
+        // Regression: the LLM can hand back a non-ISO or garbage date string despite the
+        // schema's "format": "date" hint — JsonSchemaLiteValidator doesn't check format, so
+        // this must fail gracefully rather than throw FormatException (code review finding).
+        var tool = new CreateReminderTool(
+            Substitute.For<ISender>(), BuildDb(), Substitute.For<IFamilyOsAuthorizationService>());
+
+        var result = await tool.ResolveAsync(StandaloneRawArgs("holnap"), Ctx, default);
+
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("dátum");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoneAnchor_MalformedDueTime_ReturnsFailureNotThrow()
+    {
+        var tool = new CreateReminderTool(
+            Substitute.For<ISender>(), BuildDb(), Substitute.For<IFamilyOsAuthorizationService>());
+
+        var result = await tool.ResolveAsync(StandaloneRawArgs("2026-07-13", "25:99"), Ctx, default);
+
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("időpontja");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoneAnchor_SendsCreateReminderCommandWithNullAnchors()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<FamilyOs.Application.Reminders.CreateReminderCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new ReminderDto { Id = Guid.NewGuid(), TaskId = null, DeadlineId = null });
+
+        var tool = new CreateReminderTool(sender, Substitute.For<IFamilyOsDbContext>(), Substitute.For<IFamilyOsAuthorizationService>());
+
+        var resolved = JsonDocument.Parse($$"""
+            {
+              "anchorType": "none",
+              "triggerUtc": "2026-07-13T07:00:00Z",
+              "channel": "inApp",
+              "recurrence": null,
+              "targetUserAccountId": "{{UserId}}",
+              "createdByUserId": "{{UserId}}"
+            }
+            """).RootElement;
+
+        var result = await tool.ExecuteAsync(resolved, Ctx, default);
+
+        result.ResultType.Should().Be("Reminder");
+        await sender.Received(1).Send(
+            Arg.Is<FamilyOs.Application.Reminders.CreateReminderCommand>(c => c.TaskId == null && c.DeadlineId == null),
+            Arg.Any<CancellationToken>());
+        await sender.DidNotReceive().Send(Arg.Any<FamilyOs.Application.Deadlines.CreateDeadlineCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

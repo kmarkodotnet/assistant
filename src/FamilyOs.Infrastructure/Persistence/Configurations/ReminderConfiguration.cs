@@ -40,10 +40,10 @@ internal sealed class ReminderConfiguration : IEntityTypeConfiguration<Reminder>
             .OnDelete(DeleteBehavior.Cascade)
             .IsRequired(false);
 
-        // DB-level XOR check
+        // DB-level "at most one anchor" check (ADR-0011 D5)
         builder.ToTable(t => t.HasCheckConstraint(
             "chk_reminder_xor",
-            "(task_id IS NOT NULL AND deadline_id IS NULL) OR (task_id IS NULL AND deadline_id IS NOT NULL)"));
+            "NOT (task_id IS NOT NULL AND deadline_id IS NOT NULL)"));
 
         // Index on (target_user_account_id, trigger_utc) filtered by Scheduled
         builder.HasIndex(x => new { x.TargetUserAccountId, x.TriggerUtc })

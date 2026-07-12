@@ -30,6 +30,17 @@ public sealed class ReminderXorTests
     }
 
     [Fact]
+    public void ForStandalone_SetsTaskIdAndDeadlineIdNull()
+    {
+        // ADR-0011 D5: horgony nélküli emlékeztető — sem TaskId, sem DeadlineId.
+        var reminder = Reminder.ForStandalone(UserId, FutureTrigger, NotificationChannel.InApp, UserId);
+
+        Assert.Null(reminder.TaskId);
+        Assert.Null(reminder.DeadlineId);
+        Assert.Equal(ReminderStatus.Scheduled, reminder.Status);
+    }
+
+    [Fact]
     public void ForTask_WithEmptyGuid_Throws()
     {
         Assert.Throws<ArgumentException>(() =>

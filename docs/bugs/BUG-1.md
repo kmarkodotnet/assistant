@@ -137,4 +137,3 @@ az interceptor "elkapja előle" a navigációt.
 `frontend/e2e/tool-calling/tool-calling-flow.spec.ts` → **QA-E8-05** teszt
 piros; a `docs/bugs/BUG-1-after-click.png` screenshot és a fenti repro-lépések
 mutatják a hibát. A többi 4 teszt (QA-E8-01…04) zöld.
->>>>>>> feature/nl-tool-calling

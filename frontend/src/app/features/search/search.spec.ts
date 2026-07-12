@@ -449,3 +449,70 @@ describe('SearchFacade — tool-call proposal flow', () => {
     expect(apiMock.confirmToolCall).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── SearchFacade error handling — 501 (feature not enabled) ──────────────────────
+
+describe('SearchFacade — HTTP 501 error handling', () => {
+  let facade: SearchFacade;
+  let apiMock: {
+    search: ReturnType<typeof vi.fn>;
+    getSaved: ReturnType<typeof vi.fn>;
+    saveSearch: ReturnType<typeof vi.fn>;
+    deleteSaved: ReturnType<typeof vi.fn>;
+    confirmToolCall: ReturnType<typeof vi.fn>;
+    rejectToolCall: ReturnType<typeof vi.fn>;
+  };
+  let notifyMock: { success: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    apiMock = {
+      search: vi.fn(),
+      getSaved: vi.fn(),
+      saveSearch: vi.fn(),
+      deleteSaved: vi.fn(),
+      confirmToolCall: vi.fn(),
+      rejectToolCall: vi.fn(),
+    };
+    notifyMock = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+
+    const injector = Injector.create({
+      providers: [
+        { provide: SearchApiService, useValue: apiMock },
+        { provide: NotificationService, useValue: notifyMock },
+      ],
+    });
+    facade = runInInjectionContext(injector, () => new SearchFacade());
+  });
+
+  it('ask() shows specific message for HTTP 501 (Command mode not enabled)', async () => {
+    const error501 = { status: 501, error: { detail: 'Not Implemented' } };
+    apiMock.search.mockReturnValue(throwError(() => error501));
+
+    await facade.ask({ query: 'Parancs kérés', mode: 'Command' });
+
+    expect(facade.error()).toBe('A parancs mód jelenleg nincs bekapcsolva ezen a szerveren.');
+    expect(notifyMock.error).toHaveBeenCalledWith(
+      'A parancs mód jelenleg nincs bekapcsolva ezen a szerveren.',
+    );
+  });
+
+  it('ask() shows generic message for other HTTP errors', async () => {
+    const error500 = { status: 500, error: { detail: 'Internal Server Error' } };
+    apiMock.search.mockReturnValue(throwError(() => error500));
+
+    await facade.ask({ query: 'Keresés', mode: 'Text' });
+
+    expect(facade.error()).toBe('Nem sikerült végrehajtani a keresést.');
+    expect(notifyMock.error).toHaveBeenCalledWith('Nem sikerült végrehajtani a keresést.');
+  });
+
+  it('ask() shows generic message for non-HTTP errors', async () => {
+    const plainError = new Error('Network unreachable');
+    apiMock.search.mockReturnValue(throwError(() => plainError));
+
+    await facade.ask({ query: 'Keresés', mode: 'Text' });
+
+    expect(facade.error()).toBe('Nem sikerült végrehajtani a keresést.');
+    expect(notifyMock.error).toHaveBeenCalledWith('Nem sikerült végrehajtani a keresést.');
+  });
+});

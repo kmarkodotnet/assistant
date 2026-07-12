@@ -110,7 +110,7 @@ import { NotificationService } from '../../core/notifications/notification.servi
         <div class="flex-1 min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-sm font-medium">
-              {{ r.taskId ? 'Feladat emlékeztető' : 'Határidő emlékeztető' }}
+              {{ r.taskId ? 'Feladat emlékeztető' : (r.deadlineId ? 'Határidő emlékeztető' : 'Emlékeztető') }}
             </span>
             @if (r.escalationLevel > 0) {
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
